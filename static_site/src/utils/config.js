@@ -1,12 +1,12 @@
-const requiredEnvVars = [
+const REQUIRED_ENV_VARS = [
   'REACT_APP_COGNITO_USER_POOL_ID',
   'REACT_APP_COGNITO_CLIENT_ID',
   'REACT_APP_COGNITO_DOMAIN',
 ];
 
-const missingVars = requiredEnvVars.filter((key) => !process.env[key]);
+const missingVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 if (missingVars.length > 0 && process.env.NODE_ENV === 'production') {
-  console.error(`Missing required environment variables: ${missingVars.join(', ')}`);
+  console.error(`Missing environment variables: ${missingVars.join(', ')}`);
 }
 
 const config = {
@@ -25,4 +25,3 @@ const config = {
 };
 
 export default config;
-

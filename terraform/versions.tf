@@ -22,7 +22,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "Agentic AI Demo"
+      Project     = var.app_name
       Owner       = "Todd"
       Provisioner = "Terraform"
       Environment = var.environment

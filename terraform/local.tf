@@ -1,9 +1,6 @@
 locals {
+  environment     = replace(var.environment, "_", "-")
+  domain_name     = "${local.environment}.${var.domain}"
   api_domain_name = "${local.environment}-api.${var.domain}"
-
-  bedrock_model_id = var.bedrock_model_id
-
-  domain_name = "${local.environment}.${var.domain}"
-
-  environment = replace(var.environment, "_", "-")
+  bedrock_model   = var.bedrock_model_id
 }

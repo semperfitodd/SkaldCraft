@@ -90,4 +90,3 @@ export function getUserFromToken() {
   const { idToken } = getTokens();
   return decodeToken(idToken);
 }
-

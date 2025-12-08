@@ -1,33 +1,21 @@
 locals {
-  auth_domain = "${local.environment}-auth.${var.domain}"
+  auth_domain   = "${local.environment}-auth.${var.domain}"
+  mobile_scheme = var.app_name
 
-  cognito_suffix = "skaldcraft"
+  cognito_callback_urls = ["https://${local.domain_name}/auth/callback"]
+  cognito_logout_urls   = ["https://${local.domain_name}/logout"]
 
-  cognito_callback_urls = [
-    "https://${local.domain_name}/auth/callback"
-  ]
-
-  cognito_logout_urls = [
-    "https://${local.domain_name}/logout"
-  ]
-
-  # Determine which identity providers are configured
   apple_configured  = var.apple_app_id != "" && var.apple_key_id != "" && var.apple_private_key != "" && var.apple_team_id != ""
   google_configured = var.google_client_id != "" && var.google_client_secret != ""
 
-  # Build list of supported identity providers
   supported_identity_providers = concat(
     local.apple_configured ? ["SignInWithApple"] : [],
     local.google_configured ? ["Google"] : []
   )
 }
 
-# -----------------------------------------------------------------------------
-# User Pool
-# -----------------------------------------------------------------------------
-
 resource "aws_cognito_user_pool" "main" {
-  name = "${var.environment}_${local.cognito_suffix}"
+  name = "${var.environment}_${var.app_name}"
 
   mfa_configuration        = "OFF"
   auto_verified_attributes = ["email"]
@@ -103,12 +91,10 @@ resource "aws_cognito_identity_provider" "google" {
 }
 
 resource "aws_cognito_user_pool_client" "main" {
-  name         = "${var.environment}_${local.cognito_suffix}_client"
+  name         = "${var.environment}_${var.app_name}_client"
   user_pool_id = aws_cognito_user_pool.main.id
 
-  explicit_auth_flows = ["ALLOW_REFRESH_TOKEN_AUTH"]
-
-  # Only include providers that are configured
+  explicit_auth_flows          = ["ALLOW_REFRESH_TOKEN_AUTH"]
   supported_identity_providers = local.supported_identity_providers
 
   allowed_oauth_flows                  = ["code"]
@@ -117,11 +103,11 @@ resource "aws_cognito_user_pool_client" "main" {
 
   callback_urls = concat(
     local.cognito_callback_urls,
-    ["skaldcraft://auth/callback"]
+    ["${local.mobile_scheme}://auth/callback"]
   )
   logout_urls = concat(
     local.cognito_logout_urls,
-    ["skaldcraft://logout"]
+    ["${local.mobile_scheme}://logout"]
   )
 
   access_token_validity  = 24
@@ -137,10 +123,6 @@ resource "aws_cognito_user_pool_client" "main" {
     aws_cognito_identity_provider.google
   ]
 }
-
-# -----------------------------------------------------------------------------
-# Custom Domain & SSL
-# -----------------------------------------------------------------------------
 
 resource "aws_cognito_user_pool_domain" "main" {
   domain          = local.auth_domain
@@ -185,7 +167,7 @@ resource "aws_route53_record" "cognito_domain" {
   type    = "A"
 
   alias {
-    name = aws_cognito_user_pool_domain.main.cloudfront_distribution
+    name                   = aws_cognito_user_pool_domain.main.cloudfront_distribution
     zone_id                = "Z2FDTNDATAQYW2"
     evaluate_target_health = false
   }
