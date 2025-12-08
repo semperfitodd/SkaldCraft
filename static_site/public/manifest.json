@@ -1,0 +1,16 @@
+{
+  "short_name": "SkaldCraft",
+  "name": "SkaldCraft - AI-Powered Reading App",
+  "description": "An AI-powered reading app for all levels. Created by Todd Bernson.",
+  "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#f5a623",
+  "background_color": "#ffffff"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "lambda-temp",
+  "version": "1.0.0",
+  "description": "Hello World Lambda function in TypeScript",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "lambda",
+    "aws",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.5"
+  }
+}
+
