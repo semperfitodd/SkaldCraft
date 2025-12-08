@@ -1,0 +1,28 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.layout__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .layout__header {
+    padding: 0 var(--space-4);
+  }
+}
+
+.layout__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+

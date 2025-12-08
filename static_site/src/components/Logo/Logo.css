@@ -1,0 +1,61 @@
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.logo__image {
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-glow);
+}
+
+.logo__text {
+  font-family: var(--font-serif);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Sizes */
+.logo--sm .logo__image {
+  width: 32px;
+  height: 32px;
+}
+
+.logo--sm .logo__text {
+  font-size: var(--text-xl);
+}
+
+.logo--md .logo__image {
+  width: 48px;
+  height: 48px;
+}
+
+.logo--md .logo__text {
+  font-size: var(--text-2xl);
+}
+
+.logo--lg .logo__image {
+  width: 120px;
+  height: 120px;
+  border-radius: var(--radius-xl);
+}
+
+.logo--lg .logo__text {
+  font-size: var(--text-5xl);
+}
+
+/* Large logo stacks vertically */
+.logo--lg {
+  flex-direction: column;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .logo--lg .logo__image {
+    width: 100px;
+    height: 100px;
+  }
+}
+
