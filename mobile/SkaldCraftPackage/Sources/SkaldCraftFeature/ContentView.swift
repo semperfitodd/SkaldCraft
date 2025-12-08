@@ -1,9 +1,18 @@
 import SwiftUI
 
 public struct ContentView: View {
-    public var body: some View {
-        Text("Hello, World!")
-    }
-    
+    @State private var authService = AuthService()
+
     public init() {}
+
+    public var body: some View {
+        Group {
+            if authService.isAuthenticated {
+                HomeView()
+            } else {
+                LoginView()
+            }
+        }
+        .environment(authService)
+    }
 }
