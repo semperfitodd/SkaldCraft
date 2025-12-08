@@ -309,7 +309,3 @@ SkaldCraft/
 ## Author
 
 **Todd Bernson**
-
-## License
-
-All rights reserved.
