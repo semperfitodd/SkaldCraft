@@ -5,6 +5,7 @@
 **/build/*
 **/builds/*
 **/node_modules/*
+package-lock.json
 
 # secrets
 **/Secrets.plist

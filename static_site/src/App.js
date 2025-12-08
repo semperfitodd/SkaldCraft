@@ -1,11 +1,23 @@
-import './App.css';
+import { useAuth } from './hooks';
+import { Loading } from './components';
+import { LoginPage, HomePage } from './pages';
 
 function App() {
-  return (
-    <div className="App">
-      <h1>Hello World</h1>
-    </div>
-  );
+  const { authenticated, user, loading, error } = useAuth();
+
+  if (loading) {
+    return <Loading />;
+  }
+
+  if (error) {
+    return <Loading message={error} />;
+  }
+
+  if (!authenticated) {
+    return <LoginPage />;
+  }
+
+  return <HomePage user={user} />;
 }
 
 export default App;

@@ -1,3 +1,8 @@
+variable "app_name" {
+  description = "Application name for Cognito pool and mobile deep links"
+  type        = string
+}
+
 variable "domain" {
   description = "Base domain for the website and API"
   type        = string
@@ -19,10 +24,9 @@ variable "environment" {
 variable "region" {
   description = "AWS region for all resources"
   type        = string
-  default     = null
   validation {
     condition     = can(regex("^[a-z]+-[a-z]+-[0-9]+$", var.region))
-    error_message = "Region must be a valid AWS region format (e.g., us-east-1, eu-west-1)."
+    error_message = "Region must be a valid AWS region format (e.g., us-east-1)."
   }
 }
 
@@ -38,12 +42,8 @@ variable "bedrock_model_id" {
   default     = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 }
 
-# =============================================================================
-# Apple Sign In Configuration
-# =============================================================================
-
 variable "apple_app_id" {
-  description = "Apple Services ID (client_id) for Sign in with Apple"
+  description = "Apple Services ID for Sign in with Apple"
   type        = string
   default     = ""
 }
@@ -55,7 +55,7 @@ variable "apple_key_id" {
 }
 
 variable "apple_private_key" {
-  description = "Base64 encoded Apple private key for Sign in with Apple"
+  description = "Base64 encoded Apple private key"
   type        = string
   sensitive   = true
   default     = ""
@@ -66,10 +66,6 @@ variable "apple_team_id" {
   type        = string
   default     = ""
 }
-
-# =============================================================================
-# Google Sign In Configuration
-# =============================================================================
 
 variable "google_client_id" {
   description = "Google OAuth Client ID"
