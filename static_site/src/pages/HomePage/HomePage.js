@@ -1,42 +1,41 @@
-import { useState, useEffect } from 'react';
-import { Layout, Logo, Button, Loading } from '../../components';
+import { Layout, Logo, Button } from '../../components';
 import { buildLogoutUrl } from '../../utils/auth';
-import { fetchGreeting } from '../../utils/api';
 import './HomePage.css';
 
-function HomePage() {
-  const [greeting, setGreeting] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchGreeting()
-      .then((data) => setGreeting(data.message))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+function HomePage({ profile, onNavigateToProfile }) {
+  const getDisplayName = () => {
+    if (!profile) return 'there';
+    if (profile.givenName && profile.familyName) {
+      return `${profile.givenName} ${profile.familyName}`;
+    }
+    if (profile.givenName) return profile.givenName;
+    if (profile.email) return profile.email.split('@')[0];
+    return 'there';
+  };
 
   const header = (
     <>
       <Logo size="sm" />
-      <Button as="a" href={buildLogoutUrl()} variant="ghost" size="sm">
-        Sign Out
-      </Button>
+      <div className="home-page__header-actions">
+        <button 
+          className="home-page__profile-btn"
+          onClick={onNavigateToProfile}
+        >
+          Profile
+        </button>
+        <Button as="a" href={buildLogoutUrl()} variant="ghost" size="sm">
+          Sign Out
+        </Button>
+      </div>
     </>
   );
-
-  if (loading) {
-    return (
-      <Layout header={header}>
-        <Loading />
-      </Layout>
-    );
-  }
 
   return (
     <Layout header={header}>
       <div className="home-page">
-        <h1 className="home-page__greeting">{error ? 'Welcome!' : greeting}</h1>
+        <h1 className="home-page__greeting">
+          Hello, {getDisplayName()}!
+        </h1>
         <p className="home-page__message">Welcome to SkaldCraft</p>
       </div>
     </Layout>
@@ -44,4 +43,3 @@ function HomePage() {
 }
 
 export default HomePage;
-

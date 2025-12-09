@@ -2,8 +2,11 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AuthService.self) private var authService
-    @State private var greeting: String = ""
+    @State private var profile: UserProfile?
     @State private var isLoading = true
+    @State private var error: Error?
+    @State private var showOnboarding = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -16,14 +19,39 @@ struct HomeView: View {
                     AppLogo(size: .small)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    signOutButton
+                    HStack(spacing: 8) {
+                        if profile != nil {
+                            Button("Profile") { showSettings = true }
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("Sign Out") { authService.handleLogout() }
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(Color.background.opacity(0.9), for: .navigationBar)
         }
-        .task {
-            await fetchGreeting()
+        .task { await fetchProfile() }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingQuestionnaireView(
+                initialProfile: profile?.profile,
+                onComplete: { updatedProfile in
+                    profile = updatedProfile
+                    showOnboarding = false
+                }
+            )
+            .environment(authService)
+        }
+        .sheet(isPresented: $showSettings) {
+            if let profile {
+                ProfileSettingsView(profile: profile) { updatedProfile in
+                    self.profile = updatedProfile
+                }
+                .environment(authService)
+            }
         }
     }
 
@@ -36,46 +64,74 @@ struct HomeView: View {
         .ignoresSafeArea()
     }
 
+    @ViewBuilder
     private var content: some View {
+        if isLoading {
+            ProgressView().tint(.white)
+        } else if let error {
+            errorView(error)
+        } else {
+            mainContent
+        }
+    }
+    
+    private var mainContent: some View {
         VStack(spacing: 16) {
-            if isLoading {
-                ProgressView()
-                    .tint(.white)
-            } else {
-                Text(greeting.isEmpty ? "Welcome!" : greeting)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
+            Text("Hello, \(displayName)!")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .foregroundStyle(.white)
 
-                Text("Welcome to SkaldCraft")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Welcome to SkaldCraft")
+                .font(.title3)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
-    private var signOutButton: some View {
-        Button("Sign Out") {
-            authService.handleLogout()
+    
+    private func errorView(_ error: Error) -> some View {
+        VStack(spacing: 12) {
+            Text("Something went wrong")
+                .font(.headline)
+                .foregroundStyle(.white)
+            
+            Text(error.localizedDescription)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            
+            Button("Try Again") {
+                Task { await fetchProfile() }
+            }
+            .buttonStyle(.bordered)
+            .tint(.orange)
         }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
+        .padding()
     }
-
-    private func fetchGreeting() async {
+    
+    private var displayName: String {
+        profile?.displayName ?? authService.user?.displayName ?? "there"
+    }
+    
+    private func fetchProfile() async {
         guard let idToken = authService.idToken else {
-            greeting = "Hello, \(authService.user?.displayName ?? "there")!"
             isLoading = false
             return
         }
 
+        isLoading = true
+        error = nil
+        
         do {
-            let response = try await APIService.fetchGreeting(idToken: idToken)
-            greeting = response.message
+            let fetchedProfile = try await APIService.fetchProfile(idToken: idToken)
+            profile = fetchedProfile
+            if !fetchedProfile.onboardingComplete {
+                showOnboarding = true
+            }
         } catch {
-            greeting = "Hello, \(authService.user?.displayName ?? "there")!"
+            self.error = error
         }
+        
         isLoading = false
     }
 }
