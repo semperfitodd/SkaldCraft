@@ -10,8 +10,9 @@ module "lambda_api" {
   timeout       = 30
 
   environment_variables = {
-    ENVIRONMENT = var.environment
-    USERS_TABLE = aws_dynamodb_table.users.name
+    ENVIRONMENT          = var.environment
+    USERS_TABLE          = aws_dynamodb_table.users.name
+    CHILD_PROFILES_TABLE = aws_dynamodb_table.child_profiles.name
   }
 
   source_path = [
@@ -47,7 +48,7 @@ module "lambda_api" {
 
 resource "aws_iam_policy" "lambda_dynamodb" {
   name        = "${var.environment}_lambda_dynamodb"
-  description = "Allow Lambda to access DynamoDB Users table"
+  description = "Allow Lambda to access DynamoDB Users and ChildProfiles tables"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -63,6 +64,20 @@ resource "aws_iam_policy" "lambda_dynamodb" {
         Resource = [
           aws_dynamodb_table.users.arn,
           "${aws_dynamodb_table.users.arn}/index/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query"
+        ]
+        Resource = [
+          aws_dynamodb_table.child_profiles.arn,
+          "${aws_dynamodb_table.child_profiles.arn}/index/*"
         ]
       }
     ]

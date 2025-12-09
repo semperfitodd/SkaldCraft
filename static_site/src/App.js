@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks';
 import { Loading } from './components';
 import { LoginPage, HomePage, OnboardingPage, ProfilePage } from './pages';
-import { fetchProfile } from './utils/api';
+import { fetchProfile, fetchProfiles } from './utils/api';
 
 const VIEW = {
   HOME: 'home',
@@ -13,17 +13,29 @@ const VIEW = {
 function App() {
   const { authenticated, loading: authLoading, error: authError } = useAuth();
   const [profile, setProfile] = useState(null);
+  const [profiles, setProfiles] = useState(null); // { parent, children }
+  const [activeProfile, setActiveProfile] = useState({ type: 'adult', profileId: null });
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState(null);
   const [currentView, setCurrentView] = useState(VIEW.HOME);
 
+  const loadProfiles = useCallback(async () => {
+    try {
+      const profilesData = await fetchProfiles();
+      setProfiles(profilesData);
+    } catch (err) {
+      console.error('Failed to load profiles:', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (authenticated && !profile) {
       setProfileLoading(true);
-      fetchProfile()
-        .then((data) => {
-          setProfile(data);
-          setCurrentView(data.onboardingComplete ? VIEW.HOME : VIEW.ONBOARDING);
+      Promise.all([fetchProfile(), fetchProfiles()])
+        .then(([profileData, profilesData]) => {
+          setProfile(profileData);
+          setProfiles(profilesData);
+          setCurrentView(profileData.onboardingComplete ? VIEW.HOME : VIEW.ONBOARDING);
         })
         .catch((err) => setProfileError(err.message))
         .finally(() => setProfileLoading(false));
@@ -37,6 +49,14 @@ function App() {
 
   const handleProfileUpdate = (updatedProfile) => {
     setProfile(updatedProfile);
+  };
+
+  const handleSelectProfile = (newActiveProfile) => {
+    setActiveProfile(newActiveProfile);
+  };
+
+  const handleProfilesChange = async () => {
+    await loadProfiles();
   };
 
   if (authLoading) return <Loading />;
@@ -61,7 +81,11 @@ function App() {
 
   return (
     <HomePage 
-      profile={profile} 
+      profile={profile}
+      profiles={profiles}
+      activeProfile={activeProfile}
+      onSelectProfile={handleSelectProfile}
+      onProfilesChange={handleProfilesChange}
       onNavigateToProfile={() => setCurrentView(VIEW.PROFILE)}
     />
   );

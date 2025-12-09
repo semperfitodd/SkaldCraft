@@ -3,4 +3,6 @@ export { default as Layout } from './Layout';
 export { default as Loading } from './Loading';
 export { default as Logo } from './Logo';
 export { default as ProfileForm } from './ProfileForm';
+export { default as ProfilesMenu } from './ProfilesMenu';
+export { default as ChildProfileForm } from './ChildProfileForm';
 export { AppleIcon, GoogleIcon } from './icons';

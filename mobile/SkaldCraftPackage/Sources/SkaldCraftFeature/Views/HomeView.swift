@@ -3,10 +3,13 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AuthService.self) private var authService
     @State private var profile: UserProfile?
+    @State private var profiles: ProfilesResponse?
+    @State private var activeProfile: ActiveProfileType = .adult
     @State private var isLoading = true
     @State private var error: Error?
     @State private var showOnboarding = false
     @State private var showSettings = false
+    @State private var showProfiles = false
 
     var body: some View {
         NavigationStack {
@@ -19,22 +22,38 @@ struct HomeView: View {
                     AppLogo(size: .small)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 8) {
-                        if profile != nil {
-                            Button("Profile") { showSettings = true }
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                    Menu {
+                        if profiles != nil {
+                            Button {
+                                showProfiles = true
+                            } label: {
+                                Label("Switch Profile", systemImage: "person.2")
+                            }
                         }
-                        Button("Sign Out") { authService.handleLogout() }
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        if profile != nil {
+                            Button {
+                                showSettings = true
+                            } label: {
+                                Label("Settings", systemImage: "gear")
+                            }
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            authService.handleLogout()
+                        } label: {
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.title3)
+                            .foregroundStyle(.white)
                     }
                 }
             }
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(Color.background.opacity(0.9), for: .navigationBar)
         }
-        .task { await fetchProfile() }
+        .task { await fetchAllData() }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingQuestionnaireView(
                 initialProfile: profile?.profile,
@@ -52,6 +71,13 @@ struct HomeView: View {
                 }
                 .environment(authService)
             }
+        }
+        .sheet(isPresented: $showProfiles) {
+            ProfilesView(
+                profiles: $profiles,
+                activeProfile: $activeProfile
+            )
+            .environment(authService)
         }
     }
 
@@ -77,7 +103,7 @@ struct HomeView: View {
     
     private var mainContent: some View {
         VStack(spacing: 16) {
-            Text("Hello, \(displayName)!")
+            Text("Hello, \(activeDisplayName)!")
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .foregroundStyle(.white)
@@ -85,6 +111,17 @@ struct HomeView: View {
             Text("Welcome to SkaldCraft")
                 .font(.title3)
                 .foregroundStyle(.secondary)
+            
+            if case .child(let profileId) = activeProfile,
+               let child = profiles?.children.first(where: { $0.profileId == profileId }) {
+                Text("Reading as: \(child.displayName)")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.orange.opacity(0.15))
+                    .clipShape(Capsule())
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -101,7 +138,7 @@ struct HomeView: View {
                 .multilineTextAlignment(.center)
             
             Button("Try Again") {
-                Task { await fetchProfile() }
+                Task { await fetchAllData() }
             }
             .buttonStyle(.bordered)
             .tint(.orange)
@@ -109,11 +146,16 @@ struct HomeView: View {
         .padding()
     }
     
-    private var displayName: String {
-        profile?.displayName ?? authService.user?.displayName ?? "there"
+    private var activeDisplayName: String {
+        switch activeProfile {
+        case .adult:
+            return profiles?.parent.displayName ?? profile?.displayName ?? authService.user?.displayName ?? "there"
+        case .child(let profileId):
+            return profiles?.children.first(where: { $0.profileId == profileId })?.displayName ?? "Child"
+        }
     }
     
-    private func fetchProfile() async {
+    private func fetchAllData() async {
         guard let idToken = authService.idToken else {
             isLoading = false
             return
@@ -123,9 +165,15 @@ struct HomeView: View {
         error = nil
         
         do {
-            let fetchedProfile = try await APIService.fetchProfile(idToken: idToken)
-            profile = fetchedProfile
-            if !fetchedProfile.onboardingComplete {
+            async let fetchedProfile = APIService.fetchProfile(idToken: idToken)
+            async let fetchedProfiles = APIService.fetchProfiles(idToken: idToken)
+            
+            let (profileResult, profilesResult) = try await (fetchedProfile, fetchedProfiles)
+            
+            profile = profileResult
+            profiles = profilesResult
+            
+            if !profileResult.onboardingComplete {
                 showOnboarding = true
             }
         } catch {
