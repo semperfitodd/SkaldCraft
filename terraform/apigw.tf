@@ -58,7 +58,78 @@ module "api_gateway" {
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_temp.lambda_function_arn
+        uri                    = module.lambda_api.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /me" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_api.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /profile" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_api.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "PUT /profile" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_api.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    # Profiles routes for parent + child profiles
+    "GET /profiles" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_api.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "POST /profiles" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_api.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "PUT /profiles/{profileId}" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_api.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "DELETE /profiles/{profileId}" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_api.lambda_function_arn
         payload_format_version = "2.0"
       }
     }

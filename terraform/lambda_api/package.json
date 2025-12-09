@@ -1,7 +1,7 @@
 {
-  "name": "lambda-temp",
+  "name": "lambda-api",
   "version": "1.0.0",
-  "description": "Hello World Lambda function in TypeScript",
+  "description": "SkaldCraft API Lambda function with DynamoDB",
   "main": "index.js",
   "scripts": {
     "build": "tsc"
@@ -9,10 +9,15 @@
   "keywords": [
     "lambda",
     "aws",
-    "typescript"
+    "typescript",
+    "dynamodb"
   ],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0"
+  },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",
     "@types/node": "^20.14.0",

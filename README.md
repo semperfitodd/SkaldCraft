@@ -302,7 +302,7 @@ SkaldCraft/
 │       ├── styles/           # Global styles and variables
 │       └── utils/            # Utilities and configuration
 └── terraform/                # Infrastructure as code
-    ├── lambda_temp/          # Lambda function source
+    ├── lambda_api/           # API Lambda function source
     └── *.tf                  # Terraform configurations
 ```
 
