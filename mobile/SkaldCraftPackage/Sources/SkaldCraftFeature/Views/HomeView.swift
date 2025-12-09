@@ -2,6 +2,8 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AuthService.self) private var authService
+    @State private var greeting: String = ""
+    @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
@@ -20,6 +22,9 @@ struct HomeView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(Color.background.opacity(0.9), for: .navigationBar)
         }
+        .task {
+            await fetchGreeting()
+        }
     }
 
     private var backgroundGradient: some View {
@@ -33,14 +38,19 @@ struct HomeView: View {
 
     private var content: some View {
         VStack(spacing: 16) {
-            Text("Hello, \(authService.user?.displayName ?? "there")!")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .foregroundStyle(.white)
+            if isLoading {
+                ProgressView()
+                    .tint(.white)
+            } else {
+                Text(greeting.isEmpty ? "Welcome!" : greeting)
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
 
-            Text("Welcome to SkaldCraft")
-                .font(.title3)
-                .foregroundStyle(.secondary)
+                Text("Welcome to SkaldCraft")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -51,5 +61,21 @@ struct HomeView: View {
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
+    }
+
+    private func fetchGreeting() async {
+        guard let idToken = authService.idToken else {
+            greeting = "Hello, \(authService.user?.displayName ?? "there")!"
+            isLoading = false
+            return
+        }
+
+        do {
+            let response = try await APIService.fetchGreeting(idToken: idToken)
+            greeting = response.message
+        } catch {
+            greeting = "Hello, \(authService.user?.displayName ?? "there")!"
+        }
+        isLoading = false
     }
 }

@@ -9,6 +9,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     private(set) var user: UserInfo?
     private(set) var isLoading = false
     private(set) var error: String?
+    private(set) var idToken: String?
 
     private let tokenStorage = TokenStorage()
 
@@ -19,18 +20,21 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
 
     func checkAuthStatus() {
         let tokens = tokenStorage.getTokens()
-        guard let idToken = tokens.idToken else {
+        guard let token = tokens.idToken else {
             isAuthenticated = false
             user = nil
+            idToken = nil
             return
         }
 
-        if tokenStorage.isTokenValid(idToken) {
+        if tokenStorage.isTokenValid(token) {
             isAuthenticated = true
-            user = tokenStorage.decodeToken(idToken)
+            user = tokenStorage.decodeToken(token)
+            idToken = token
         } else {
             isAuthenticated = false
             user = nil
+            idToken = nil
             tokenStorage.clearTokens()
         }
     }
@@ -60,6 +64,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         tokenStorage.clearTokens()
         isAuthenticated = false
         user = nil
+        idToken = nil
     }
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {

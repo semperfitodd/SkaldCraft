@@ -3,7 +3,7 @@ import { Loading } from './components';
 import { LoginPage, HomePage } from './pages';
 
 function App() {
-  const { authenticated, user, loading, error } = useAuth();
+  const { authenticated, loading, error } = useAuth();
 
   if (loading) {
     return <Loading />;
@@ -17,7 +17,7 @@ function App() {
     return <LoginPage />;
   }
 
-  return <HomePage user={user} />;
+  return <HomePage />;
 }
 
 export default App;

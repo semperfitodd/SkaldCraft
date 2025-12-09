@@ -10,6 +10,10 @@ enum AppConfig {
         static let scopes = "email openid profile"
     }
 
+    enum API {
+        static let baseUrl = Secrets.apiUrl
+    }
+
     enum Providers {
         static let apple = "SignInWithApple"
         static let google = "Google"

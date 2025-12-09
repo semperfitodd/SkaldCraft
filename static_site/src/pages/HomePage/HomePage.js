@@ -1,9 +1,20 @@
-import { Layout, Logo, Button } from '../../components';
+import { useState, useEffect } from 'react';
+import { Layout, Logo, Button, Loading } from '../../components';
 import { buildLogoutUrl } from '../../utils/auth';
+import { fetchGreeting } from '../../utils/api';
 import './HomePage.css';
 
-function HomePage({ user }) {
-  const displayName = user?.given_name || user?.email?.split('@')[0] || 'there';
+function HomePage() {
+  const [greeting, setGreeting] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchGreeting()
+      .then((data) => setGreeting(data.message))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
 
   const header = (
     <>
@@ -14,10 +25,18 @@ function HomePage({ user }) {
     </>
   );
 
+  if (loading) {
+    return (
+      <Layout header={header}>
+        <Loading />
+      </Layout>
+    );
+  }
+
   return (
     <Layout header={header}>
       <div className="home-page">
-        <h1 className="home-page__greeting">Hello, {displayName}!</h1>
+        <h1 className="home-page__greeting">{error ? 'Welcome!' : greeting}</h1>
         <p className="home-page__message">Welcome to SkaldCraft</p>
       </div>
     </Layout>

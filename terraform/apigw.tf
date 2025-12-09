@@ -1,6 +1,6 @@
 module "api_gateway" {
   source  = "terraform-aws-modules/apigateway-v2/aws"
-  version = "~> 5.3"
+  version = "~> 6.0"
 
   name          = var.environment
   description   = "HTTP API Gateway for ${var.environment} environment"
@@ -41,12 +41,25 @@ module "api_gateway" {
     throttling_rate_limit    = 100
   }
 
+  authorizers = {
+    cognito = {
+      authorizer_type  = "JWT"
+      identity_sources = ["$request.header.Authorization"]
+      jwt_configuration = {
+        issuer   = "https://cognito-idp.${data.aws_region.current.region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
+        audience = [aws_cognito_user_pool_client.main.id]
+      }
+    }
+  }
+
   routes = {
-    "POST /temp" = {
+    "POST /greeting" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
         uri                    = module.lambda_temp.lambda_function_arn
-        payload_format_version = "1.0"
+        payload_format_version = "2.0"
       }
     }
   }

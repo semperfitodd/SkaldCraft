@@ -2,6 +2,7 @@ const REQUIRED_ENV_VARS = [
   'REACT_APP_COGNITO_USER_POOL_ID',
   'REACT_APP_COGNITO_CLIENT_ID',
   'REACT_APP_COGNITO_DOMAIN',
+  'REACT_APP_API_URL',
 ];
 
 const missingVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
@@ -17,6 +18,9 @@ const config = {
     redirectUri: process.env.REACT_APP_REDIRECT_URI || `${window.location.origin}/auth/callback`,
     logoutUri: process.env.REACT_APP_LOGOUT_URI || `${window.location.origin}/logout`,
     scopes: 'email openid profile',
+  },
+  api: {
+    baseUrl: process.env.REACT_APP_API_URL,
   },
   providers: {
     apple: 'SignInWithApple',
