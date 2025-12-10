@@ -1,19 +1,29 @@
 import type { DynamoDBStreamHandler } from 'aws-lambda';
 import { archiveCompletedStoryById } from './storyEngine';
 
+/**
+ * DynamoDB Stream handler that automatically archives stories when they transition to 'completed' status.
+ * 
+ * This handler:
+ * - Listens to MODIFY events on the Story table
+ * - Detects when status changes from non-completed to completed
+ * - Triggers async archiving (S3 upload + node cleanup)
+ * - Allows Lambda to retry on failure via stream configuration
+ */
 export const handler: DynamoDBStreamHandler = async (event) => {
-  console.log('[ArchiveStream] Processing batch', {
-    recordCount: event.Records.length,
-  });
+  console.log('[ArchiveStream] Processing batch', { recordCount: event.Records.length });
 
   for (const record of event.Records) {
-    if (record.eventName !== 'MODIFY') continue;
+    // Only process MODIFY events (status changes)
+    if (record.eventName !== 'MODIFY') {
+      continue;
+    }
 
     const oldImage = record.dynamodb?.OldImage;
     const newImage = record.dynamodb?.NewImage;
 
     if (!oldImage || !newImage) {
-      console.warn('[ArchiveStream] Missing OldImage or NewImage', {
+      console.warn('[ArchiveStream] Missing image data', { 
         eventName: record.eventName,
         hasOldImage: !!oldImage,
         hasNewImage: !!newImage,
@@ -21,22 +31,22 @@ export const handler: DynamoDBStreamHandler = async (event) => {
       continue;
     }
 
+    // Extract status values
     const oldStatus = oldImage.status?.S;
     const newStatus = newImage.status?.S;
     const isArchived = newImage.isArchived?.BOOL ?? false;
     const storyId = newImage.storyId?.S;
 
     if (!storyId) {
-      console.warn('[ArchiveStream] Missing storyId in NewImage');
+      console.warn('[ArchiveStream] Missing storyId in record');
       continue;
     }
 
-    const isCompletionTransition = oldStatus !== 'completed' && newStatus === 'completed';
-
-    if (isCompletionTransition && !isArchived) {
-      console.log('[ArchiveStream] Story completed, starting archive', {
-        storyId,
-        oldStatus,
+    // Check if this is a transition to completed status and not already archived
+    if (oldStatus !== 'completed' && newStatus === 'completed' && !isArchived) {
+      console.log('[ArchiveStream] Detected story completion', { 
+        storyId, 
+        oldStatus, 
         newStatus,
       });
 
@@ -44,12 +54,9 @@ export const handler: DynamoDBStreamHandler = async (event) => {
         const s3Key = await archiveCompletedStoryById(storyId);
         
         if (s3Key) {
-          console.log('[ArchiveStream] Story archived successfully', {
-            storyId,
-            s3Key,
-          });
+          console.log('[ArchiveStream] Successfully archived story', { storyId, s3Key });
         } else {
-          console.warn('[ArchiveStream] Archive returned null', { storyId });
+          console.warn('[ArchiveStream] Archive returned null (story may not exist or already archived)', { storyId });
         }
       } catch (err) {
         console.error('[ArchiveStream] Failed to archive story', {
@@ -57,13 +64,9 @@ export const handler: DynamoDBStreamHandler = async (event) => {
           error: err instanceof Error ? err.message : String(err),
           stack: err instanceof Error ? err.stack : undefined,
         });
+        // Let Lambda retry according to the stream's retry/DLQ config
         throw err;
       }
-    } else if (isArchived) {
-      console.log('[ArchiveStream] Story already archived, skipping', {
-        storyId,
-        newStatus,
-      });
     }
   }
 

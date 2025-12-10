@@ -1,0 +1,32 @@
+# Copy this file to terraform.tfvars and fill in your values
+# terraform.tfvars is gitignored and will not be committed
+
+# Required Variables
+environment = "dev"
+region      = "us-east-1"
+domain      = "example.com"
+app_name    = "SkaldCraft"
+
+# AWS Bedrock Model IDs
+# Find model IDs at: https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
+adult_story_model_id      = "anthropic.claude-3-sonnet-20240229-v1:0"
+adult_summarizer_model_id = "anthropic.claude-3-haiku-20240307-v1:0"
+
+# Apple Sign In (Optional - leave empty to disable)
+# Get credentials from: https://developer.apple.com/account/resources/identifiers/list/serviceId
+apple_app_id      = ""
+apple_key_id      = ""
+apple_team_id     = ""
+apple_private_key = ""  # Base64 encoded
+
+# Google Sign In (Optional - leave empty to disable)
+# Get credentials from: https://console.cloud.google.com/apis/credentials
+google_client_id     = ""
+google_client_secret = ""
+
+# Additional Tags (Optional)
+tags = {
+  Project     = "SkaldCraft"
+  ManagedBy   = "Terraform"
+  Environment = "dev"
+}

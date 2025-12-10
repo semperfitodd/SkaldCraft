@@ -1,22 +1,3 @@
-resource "aws_dynamodb_table" "users" {
-  name         = "${var.environment}_users"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "email"
-
-  attribute {
-    name = "email"
-    type = "S"
-  }
-
-  point_in_time_recovery {
-    enabled = true
-  }
-
-  tags = merge(var.tags, {
-    Name = "${var.environment}_users"
-  })
-}
-
 resource "aws_dynamodb_table" "child_profiles" {
   name         = "${var.environment}_child_profiles"
   billing_mode = "PAY_PER_REQUEST"
@@ -69,6 +50,10 @@ resource "aws_dynamodb_table" "stories" {
     projection_type = "ALL"
   }
 
+  # Enable DynamoDB Streams for async archiving
+  stream_enabled   = true
+  stream_view_type = "NEW_AND_OLD_IMAGES"
+
   point_in_time_recovery {
     enabled = true
   }
@@ -100,5 +85,24 @@ resource "aws_dynamodb_table" "story_nodes" {
 
   tags = merge(var.tags, {
     Name = "${var.environment}_story_nodes"
+  })
+}
+
+resource "aws_dynamodb_table" "users" {
+  name         = "${var.environment}_users"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "email"
+
+  attribute {
+    name = "email"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.environment}_users"
   })
 }

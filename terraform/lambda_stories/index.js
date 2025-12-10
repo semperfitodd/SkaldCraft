@@ -4,27 +4,16 @@ exports.handler = void 0;
 const crypto_1 = require("crypto");
 const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
 const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
+const client_lambda_1 = require("@aws-sdk/client-lambda");
+const constants_1 = require("./constants");
 const repository_1 = require("./repository");
 const storyEngine_1 = require("./storyEngine");
-const CORS_HEADERS = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-};
-const VALID_AGE_BANDS = ['adult', 'teen', 'middle-school', 'upper-elementary', 'early-elementary', 'prek'];
-const VALID_GENRES = [
-    'fantasy', 'mystery', 'sci-fi', 'romance', 'thriller', 'horror',
-    'historical', 'literary', 'adventure', 'humor', 'drama', 'western',
-    'paranormal', 'dystopian', 'mythology', 'fairy-tale', 'steampunk', 'noir',
-    'animals', 'sports', 'school-life', 'science-space', 'funny', 'comic-style',
-];
-const VALID_TONES = ['light', 'serious', 'dark', 'epic', 'humorous'];
-const VALID_POVS = ['first-person', 'third-person-limited', 'third-person-omniscient'];
-const VALID_LENGTHS = ['short', 'medium', 'long'];
+const lambdaClient = new client_lambda_1.LambdaClient({});
+const CORS_HEADERS = constants_1.CORS_HEADERS;
 const VALID_STATUSES = ['in_progress', 'completed', 'abandoned'];
 const MAX_CUSTOM_PROMPT_LENGTH = 500;
 const MAX_TITLE_LENGTH = 200;
 const MAX_USER_HINT_LENGTH = 200;
-const ADULT_AGE_THRESHOLD = 18;
 const ddbClient = new client_dynamodb_1.DynamoDBClient({});
 const docClient = lib_dynamodb_1.DynamoDBDocumentClient.from(ddbClient);
 const USERS_TABLE = process.env.USERS_TABLE;
@@ -41,6 +30,31 @@ function parseJSON(body) {
         return null;
     }
 }
+/**
+ * Invoke this Lambda function asynchronously for background processing
+ */
+async function invokeAsync(payload) {
+    const functionName = process.env.LAMBDA_FUNCTION_NAME;
+    if (!functionName) {
+        throw new Error('LAMBDA_FUNCTION_NAME environment variable not set');
+    }
+    const command = new client_lambda_1.InvokeCommand({
+        FunctionName: functionName,
+        InvocationType: 'Event', // Async invoke
+        Payload: JSON.stringify(payload),
+    });
+    try {
+        await lambdaClient.send(command);
+        console.log('[Lambda] Async invocation triggered', { action: payload.action });
+    }
+    catch (error) {
+        console.error('[Lambda] Failed to trigger async invocation', {
+            action: payload.action,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        throw error;
+    }
+}
 function calculateAge(birthday) {
     const birthDate = new Date(birthday);
     const today = new Date();
@@ -52,7 +66,7 @@ function calculateAge(birthday) {
     return age;
 }
 function isAdultProfile(user) {
-    return !!user.birthday && calculateAge(user.birthday) >= ADULT_AGE_THRESHOLD;
+    return !!user.birthday && calculateAge(user.birthday) >= constants_1.ADULT_AGE_THRESHOLD;
 }
 async function getUserProfile(email) {
     const result = await docClient.send(new lib_dynamodb_1.GetCommand({ TableName: USERS_TABLE, Key: { email } }));
@@ -67,15 +81,15 @@ async function getUserProfile(email) {
 function validateConfig(config) {
     if (!config)
         return 'config is required';
-    if (!VALID_AGE_BANDS.includes(config.ageBand))
+    if (!constants_1.AGE_BANDS.includes(config.ageBand))
         return 'Invalid ageBand';
-    if (!VALID_GENRES.includes(config.genre))
+    if (!constants_1.ALL_GENRES.includes(config.genre))
         return 'Invalid genre';
-    if (!VALID_TONES.includes(config.tone))
+    if (!constants_1.STORY_TONES.includes(config.tone))
         return 'Invalid tone';
-    if (!VALID_POVS.includes(config.pov))
+    if (!constants_1.STORY_POVS.includes(config.pov))
         return 'Invalid pov';
-    if (!VALID_LENGTHS.includes(config.targetLength))
+    if (!constants_1.STORY_LENGTHS.includes(config.targetLength))
         return 'Invalid targetLength';
     if (typeof config.explicitContentAllowed !== 'boolean')
         return 'explicitContentAllowed must be boolean';
@@ -110,13 +124,13 @@ function validateCreateNode(data) {
 function validateCreateAdultStory(data) {
     if (!data.profileId)
         return 'profileId is required';
-    if (!VALID_LENGTHS.includes(data.targetLength))
+    if (!constants_1.STORY_LENGTHS.includes(data.targetLength))
         return 'Invalid targetLength';
-    if (data.genre != null && !VALID_GENRES.includes(data.genre))
+    if (data.genre != null && !constants_1.ALL_GENRES.includes(data.genre))
         return 'Invalid genre';
-    if (data.tone != null && !VALID_TONES.includes(data.tone))
+    if (data.tone != null && !constants_1.STORY_TONES.includes(data.tone))
         return 'Invalid tone';
-    if (data.pov != null && !VALID_POVS.includes(data.pov))
+    if (data.pov != null && !constants_1.STORY_POVS.includes(data.pov))
         return 'Invalid pov';
     if (data.customPrompt && data.customPrompt.length > MAX_CUSTOM_PROMPT_LENGTH) {
         return `customPrompt must be ${MAX_CUSTOM_PROMPT_LENGTH} characters or less`;
@@ -290,11 +304,10 @@ async function handleCreateAdultStory(email, body) {
             profileId: data.profileId,
             status: story.status,
         });
-        (0, storyEngine_1.generateAdultStoryContent)(story.storyId, storyOptions).catch((error) => {
-            console.error('[Stories] Background story generation failed', {
-                storyId: story.storyId,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+        // Trigger async Lambda invocation for background generation
+        await invokeAsync({
+            action: 'generateAdultStory',
+            data: { storyId: story.storyId, storyOptions },
         });
         return response(202, { story, status: 'creating' });
     }
@@ -333,11 +346,10 @@ async function handleContinueStory(email, storyId, body) {
             choiceId: data.choiceId,
             status: story.status,
         });
-        (0, storyEngine_1.generateNextChapter)(storyId, email, data.userHint).catch((error) => {
-            console.error('[Stories] Background chapter generation failed', {
-                storyId,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+        // Trigger async Lambda invocation for background generation
+        await invokeAsync({
+            action: 'generateNextChapter',
+            data: { storyId, email, userHint: data.userHint },
         });
         return response(202, { story, status: 'generating_chapter' });
     }
@@ -391,21 +403,21 @@ async function handleGetStoryArchive(email, storyId) {
     if (story.status !== 'completed') {
         return response(400, { error: 'Story is not completed yet' });
     }
+    // Story is completed - archiving should be handled by DynamoDB Stream Lambda
     if (!story.isArchived || !story.contentS3Key) {
-        try {
-            await (0, storyEngine_1.archiveCompletedStory)(story);
-        }
-        catch (archiveError) {
-            console.error('[Stories] Failed to archive story on demand', {
-                storyId,
-                error: archiveError instanceof Error ? archiveError.message : 'Unknown error',
-            });
-            return response(500, { error: 'Failed to archive story' });
-        }
+        console.log('[Stories] Story completed but not yet archived, archiving in progress', {
+            storyId,
+            status: story.status,
+            isArchived: story.isArchived,
+        });
+        return response(202, {
+            message: 'Story is being archived. Please try again in a few moments.',
+            status: 'archiving',
+        });
     }
     const archivedStory = await (0, storyEngine_1.getArchivedStory)(storyId);
     if (!archivedStory) {
-        return response(404, { error: 'Archived story content not found' });
+        return response(404, { error: 'Archived story content not found in S3' });
     }
     return response(200, archivedStory);
 }
@@ -442,7 +454,35 @@ async function handleGetStoryChapter(email, storyId, chapterIndex) {
         outline: story.outline[chapterIndex],
     });
 }
-const handler = async (event) => {
+const handler = async (event, context) => {
+    // Handle background invocations (async invoke from same Lambda)
+    if (event.action && event.data) {
+        console.log('[Lambda] Background invocation detected', { action: event.action });
+        try {
+            if (event.action === 'generateAdultStory') {
+                const { storyId, storyOptions } = event.data;
+                await (0, storyEngine_1.generateAdultStoryContent)(storyId, storyOptions);
+                console.log('[Lambda] Background story generation complete', { storyId });
+                return;
+            }
+            if (event.action === 'generateNextChapter') {
+                const { storyId, email, userHint } = event.data;
+                await (0, storyEngine_1.generateNextChapter)(storyId, email, userHint);
+                console.log('[Lambda] Background chapter generation complete', { storyId });
+                return;
+            }
+            console.warn('[Lambda] Unknown background action', { action: event.action });
+        }
+        catch (error) {
+            console.error('[Lambda] Background invocation failed', {
+                action: event.action,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+            throw error;
+        }
+        return;
+    }
+    // Handle HTTP requests
     try {
         const claims = event.requestContext?.authorizer?.jwt?.claims || {};
         const email = claims.email;

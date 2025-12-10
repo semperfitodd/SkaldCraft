@@ -27,13 +27,3 @@ output "oauth_secrets_arn" {
   description = "ARN of the OAuth credentials secret in Secrets Manager"
   value       = aws_secretsmanager_secret.oauth_credentials.arn
 }
-
-output "dynamodb_users_table" {
-  description = "DynamoDB Users table name"
-  value       = aws_dynamodb_table.users.name
-}
-
-output "dynamodb_users_table_arn" {
-  description = "DynamoDB Users table ARN"
-  value       = aws_dynamodb_table.users.arn
-}

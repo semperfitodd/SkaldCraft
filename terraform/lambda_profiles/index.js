@@ -4,31 +4,12 @@ exports.handler = void 0;
 const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
 const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
 const crypto_1 = require("crypto");
+const constants_1 = require("./constants");
 const client = new client_dynamodb_1.DynamoDBClient({});
 const docClient = lib_dynamodb_1.DynamoDBDocumentClient.from(client);
 const USERS_TABLE = process.env.USERS_TABLE;
 const CHILD_PROFILES_TABLE = process.env.CHILD_PROFILES_TABLE;
-const MAX_CHILD_PROFILES = 5;
-const CORS_HEADERS = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-};
-const VALID_GENRES = [
-    'fantasy', 'mystery', 'sci-fi', 'romance', 'thriller', 'horror',
-    'historical', 'literary', 'adventure', 'humor', 'drama', 'western',
-    'paranormal', 'dystopian', 'mythology', 'fairy-tale', 'steampunk', 'noir',
-];
-const VALID_CHILD_GENRES = [
-    'adventure', 'animals', 'sports', 'school-life', 'history',
-    'science-space', 'funny', 'mystery', 'fairy-tales', 'comic-style',
-];
-const VALID_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh'];
-const VALID_GRL_VALUES = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'Z+',
-];
-const VALID_READING_AGE_BANDS = ['prek', 'early-elementary', 'upper-elementary', 'middle-school'];
-const DEFAULT_LANGUAGE = 'en';
+const CORS_HEADERS = constants_1.CORS_HEADERS;
 const DEFAULT_GENRES = ['fantasy'];
 function response(statusCode, body) {
     return { statusCode, headers: CORS_HEADERS, body: JSON.stringify(body) };
@@ -66,17 +47,17 @@ function validateCreateChild(data) {
         return 'displayName is required';
     if (!data.birthday || !isValidDate(data.birthday))
         return 'birthday must be valid YYYY-MM-DD';
-    if (!VALID_GRL_VALUES.includes(data.readingLevelGRL))
+    if (!constants_1.READING_LEVELS_GRL.includes(data.readingLevelGRL))
         return 'Invalid readingLevelGRL';
     if (!data.preferredGenres?.length)
         return 'preferredGenres required';
     for (const g of data.preferredGenres) {
-        if (!VALID_CHILD_GENRES.includes(g))
+        if (!constants_1.CHILD_GENRES.includes(g))
             return `Invalid genre: ${g}`;
     }
-    if (data.readingAgeBand && !VALID_READING_AGE_BANDS.includes(data.readingAgeBand))
+    if (data.readingAgeBand && !constants_1.CHILD_AGE_BANDS.includes(data.readingAgeBand))
         return 'Invalid readingAgeBand';
-    if (data.defaultLanguage && !VALID_LANGUAGES.includes(data.defaultLanguage))
+    if (data.defaultLanguage && !constants_1.LANGUAGES.includes(data.defaultLanguage))
         return 'Invalid language';
     return null;
 }
@@ -85,19 +66,19 @@ function validateUpdateChild(data) {
         return 'displayName cannot be empty';
     if (data.birthday !== undefined && !isValidDate(data.birthday))
         return 'birthday must be valid YYYY-MM-DD';
-    if (data.readingLevelGRL !== undefined && !VALID_GRL_VALUES.includes(data.readingLevelGRL))
+    if (data.readingLevelGRL !== undefined && !constants_1.READING_LEVELS_GRL.includes(data.readingLevelGRL))
         return 'Invalid readingLevelGRL';
     if (data.preferredGenres !== undefined) {
         if (!data.preferredGenres.length)
             return 'preferredGenres cannot be empty';
         for (const g of data.preferredGenres) {
-            if (!VALID_CHILD_GENRES.includes(g))
+            if (!constants_1.CHILD_GENRES.includes(g))
                 return `Invalid genre: ${g}`;
         }
     }
-    if (data.readingAgeBand !== undefined && !VALID_READING_AGE_BANDS.includes(data.readingAgeBand))
+    if (data.readingAgeBand !== undefined && !constants_1.CHILD_AGE_BANDS.includes(data.readingAgeBand))
         return 'Invalid readingAgeBand';
-    if (data.defaultLanguage !== undefined && !VALID_LANGUAGES.includes(data.defaultLanguage))
+    if (data.defaultLanguage !== undefined && !constants_1.LANGUAGES.includes(data.defaultLanguage))
         return 'Invalid language';
     return null;
 }
@@ -108,11 +89,11 @@ function validateUpdateProfile(data) {
         if (!data.preferredGenres.length)
             return 'preferredGenres cannot be empty';
         for (const g of data.preferredGenres) {
-            if (!VALID_GENRES.includes(g))
+            if (!constants_1.ADULT_GENRES.includes(g))
                 return `Invalid genre: ${g}`;
         }
     }
-    if (data.defaultLanguage !== undefined && !VALID_LANGUAGES.includes(data.defaultLanguage))
+    if (data.defaultLanguage !== undefined && !constants_1.LANGUAGES.includes(data.defaultLanguage))
         return 'Invalid language';
     return null;
 }
@@ -120,7 +101,7 @@ function normalizeUser(user) {
     return {
         ...user,
         preferredGenres: user.preferredGenres || DEFAULT_GENRES,
-        defaultLanguage: user.defaultLanguage || DEFAULT_LANGUAGE,
+        defaultLanguage: user.defaultLanguage || constants_1.DEFAULT_LANGUAGE,
         explicitContentAllowed: user.explicitContentAllowed ?? false,
     };
 }
@@ -136,7 +117,7 @@ function toProfileResponse(user) {
         profile: {
             birthday: user.birthday,
             preferredGenres: user.preferredGenres || DEFAULT_GENRES,
-            defaultLanguage: user.defaultLanguage || DEFAULT_LANGUAGE,
+            defaultLanguage: user.defaultLanguage || constants_1.DEFAULT_LANGUAGE,
             explicitContentAllowed: user.explicitContentAllowed ?? false,
         },
     };
@@ -166,7 +147,7 @@ async function getOrCreateUser(email, cognitoSub, givenName, familyName) {
         defaultProfileType: 'adult',
         onboardingComplete: false,
         preferredGenres: DEFAULT_GENRES,
-        defaultLanguage: DEFAULT_LANGUAGE,
+        defaultLanguage: constants_1.DEFAULT_LANGUAGE,
         explicitContentAllowed: false,
     };
     await docClient.send(new lib_dynamodb_1.PutCommand({ TableName: USERS_TABLE, Item: newUser }));
@@ -236,7 +217,7 @@ async function createChild(parentEmail, data) {
         birthday: data.birthday,
         createdAt: now,
         updatedAt: now,
-        defaultLanguage: data.defaultLanguage || DEFAULT_LANGUAGE,
+        defaultLanguage: data.defaultLanguage || constants_1.DEFAULT_LANGUAGE,
         explicitContentAllowed: enforceExplicitRule(data.birthday, data.explicitContentAllowed),
         preferredGenres: data.preferredGenres,
         readingLevelGRL: data.readingLevelGRL,
@@ -381,8 +362,8 @@ const handler = async (event) => {
             if (err)
                 return response(400, { error: err });
             const existing = await getChildProfiles(email);
-            if (existing.length >= MAX_CHILD_PROFILES) {
-                return response(400, { error: `Maximum ${MAX_CHILD_PROFILES} child profiles allowed` });
+            if (existing.length >= constants_1.MAX_CHILD_PROFILES) {
+                return response(400, { error: `Maximum ${constants_1.MAX_CHILD_PROFILES} child profiles allowed` });
             }
             const child = await createChild(email, data);
             return response(201, child);
