@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LENGTH_TO_NODE_COUNT = void 0;
 exports.getStoryStage = getStoryStage;
-exports.archiveCompletedStory = archiveCompletedStory;
 exports.archiveCompletedStoryById = archiveCompletedStoryById;
 exports.getArchivedStory = getArchivedStory;
 exports.initAdultStory = initAdultStory;
@@ -18,6 +17,8 @@ const repository_1 = require("./repository");
 const ADULT_STORY_MODEL_ID = process.env.ADULT_STORY_MODEL_ID;
 const STORY_ARCHIVE_BUCKET = process.env.STORY_ARCHIVE_BUCKET;
 const STORY_ARCHIVE_PREFIX = process.env.STORY_ARCHIVE_PREFIX || 'stories/';
+const MAX_TOKENS = 2800;
+const MAX_CONTEXT_CHARS = 900;
 exports.LENGTH_TO_NODE_COUNT = {
     short: 5,
     medium: 10,
@@ -97,14 +98,13 @@ function isRetryableError(error) {
         message.includes('internal server error') ||
         message.includes('timeout') ||
         message.includes('econnreset') ||
-        message.includes('network') ||
         name.includes('throttling') ||
         name.includes('serviceunavailable'));
 }
-async function invokeBedrockJSON(modelId, systemPrompt, userContent, storyId, profileId, maxRetries = 3) {
+async function invokeBedrockJSON(modelId, systemPrompt, userContent, storyId, profileId, maxRetries = 2) {
     let lastError = null;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-        const backoffMs = attempt > 0 ? Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, 10000) : 0;
+        const backoffMs = attempt > 0 ? Math.min(500 + Math.random() * 1000, 1500) : 0;
         if (backoffMs > 0) {
             console.log('[StoryEngine] Retrying after backoff', { storyId, profileId, attempt, backoffMs: Math.round(backoffMs) });
             await sleep(backoffMs);
@@ -116,7 +116,7 @@ async function invokeBedrockJSON(modelId, systemPrompt, userContent, storyId, pr
             accept: 'application/json',
             body: JSON.stringify({
                 anthropic_version: 'bedrock-2023-05-31',
-                max_tokens: 8192,
+                max_tokens: MAX_TOKENS,
                 temperature: attempt > 0 ? 0.5 : 0.9,
                 system: systemPrompt,
                 messages: [{ role: 'user', content: userContent }],
@@ -166,26 +166,8 @@ async function invokeBedrockJSON(modelId, systemPrompt, userContent, storyId, pr
         if (jsonStr.endsWith('```'))
             jsonStr = jsonStr.slice(0, -3);
         jsonStr = jsonStr.trim();
-        let fixedJson = jsonStr;
-        // Fix unescaped newlines, carriage returns, and tabs within string values
-        // This regex matches quoted strings and replaces literal newlines/tabs with escaped versions
-        const stringRegex = /"(?:[^"\\]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*"/g;
-        const strings = [];
-        let stringIndex = 0;
-        // Extract all strings, fix them, and replace with placeholders
-        fixedJson = fixedJson.replace(stringRegex, (match) => {
-            const fixed = match
-                .replace(/\n/g, '\\n')
-                .replace(/\r/g, '\\r')
-                .replace(/\t/g, '\\t');
-            strings.push(fixed);
-            return `__STRING_${stringIndex++}__`;
-        });
-        // Put the fixed strings back
-        stringIndex = 0;
-        fixedJson = fixedJson.replace(/__STRING_\d+__/g, () => strings[stringIndex++]);
         try {
-            return JSON.parse(fixedJson);
+            return JSON.parse(jsonStr);
         }
         catch (parseError) {
             const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
@@ -197,7 +179,6 @@ async function invokeBedrockJSON(modelId, systemPrompt, userContent, storyId, pr
                 textLength: textContent.length,
                 textPreview: textContent.substring(0, 300),
                 textEnd: textContent.substring(Math.max(0, textContent.length - 100)),
-                rawJson: jsonStr.length < 6000 ? jsonStr : 'too long to log',
             });
             lastError = new Error(`Failed to parse AI response as JSON: ${errorMessage}`);
             if (attempt < maxRetries - 1)
@@ -311,7 +292,7 @@ ${outline.map(ch => `${ch.title}: ${ch.description}`).join('\n')}
 ${getContentGuidelines(config.explicitContentAllowed)}
 
 CHAPTER REQUIREMENTS:
-- Write 900-1100 words of engaging prose
+- Write 700-900 words of engaging prose
 - This is a FULL CHAPTER, not a short scene - develop it thoroughly
 - Cover the major beat described in the chapter assignment
 - Establish characters, setting, and initial situation
@@ -333,7 +314,7 @@ Respond with ONLY a complete, valid JSON object. You MUST properly escape all sp
 - Backslashes must be \\\\
 
 {
-  "chapterText": "The full chapter prose (900-1100 words). Use \\n for paragraph breaks, not literal newlines.",
+  "chapterText": "The full chapter prose (700-900 words). Use \\n for paragraph breaks, not literal newlines.",
   "choices": [{"label": "Choice 1 (5-15 words)"}, {"label": "Choice 2 (5-15 words)"}],
   "localSummary": "1-2 sentence chapter summary",
   "storySummaryShort": "2-3 sentence overall story summary",
@@ -344,7 +325,7 @@ Respond with ONLY a complete, valid JSON object. You MUST properly escape all sp
 }
 
 CRITICAL: 
-- Write a FULL chapter of 900-1100 words
+- Write a FULL chapter of 700-900 words
 - Use \\n for paragraph breaks in chapterText, NOT literal newlines
 - Ensure the JSON is valid and parseable
 - Close all brackets and quotes properly`;
@@ -358,7 +339,7 @@ function buildRootChapterUserContent(options, config) {
 PREMISE:
 ${premise}
 
-Create an immersive opening chapter that establishes the story world and hooks the reader. Remember to write 900-1100 words and end with meaningful choices.`;
+Create an immersive opening chapter that establishes the story world and hooks the reader. Remember to write 700-900 words and end with meaningful choices.`;
 }
 function buildContinuationSystemPrompt(config, bible, outline, currentChapterIndex, targetNodeCount, stage, isForceEnding) {
     const chapter = outline[currentChapterIndex] || outline[outline.length - 1];
@@ -382,6 +363,12 @@ Only ${chaptersRemaining} chapters remain. Begin steering toward resolution.`;
     const choicesInstruction = isForceEnding || stage === 'resolution'
         ? '- This is the ENDING - no choices needed'
         : '- End with 2-3 meaningful choices for the reader';
+    const start = Math.max(0, currentChapterIndex - 2);
+    const end = Math.min(outline.length, currentChapterIndex + 3);
+    const contextOutline = outline
+        .slice(start, end)
+        .map(ch => `${ch.title}: ${ch.description}`)
+        .join('\n');
     return `You are an expert interactive fiction author continuing an existing story.
 
 STORY CONFIGURATION:
@@ -403,8 +390,8 @@ CHAPTER ASSIGNMENT:
 - Story Stage: ${stage.toUpperCase().replace('_', ' ')}
 - Progress: Chapter ${currentChapterIndex + 1} of ${targetNodeCount}
 
-FULL STORY OUTLINE (for context):
-${outline.map(ch => `${ch.title}: ${ch.description}`).join('\n')}
+STORY OUTLINE (nearby chapters for context):
+${contextOutline}
 ${endingInstructions}
 
 ${getContentGuidelines(config.explicitContentAllowed)}
@@ -417,7 +404,7 @@ CRITICAL RULES:
 5. Respect POV: ${config.pov}. ${getPovInstructions(config.pov)}
 
 CHAPTER REQUIREMENTS:
-- Write 900-1100 words of engaging prose
+- Write 700-900 words of engaging prose
 - This is a FULL CHAPTER - develop it thoroughly
 - Cover the beat described in the chapter assignment
 - Continue directly from the reader's choice
@@ -431,7 +418,7 @@ Respond with ONLY a complete, valid JSON object. You MUST properly escape all sp
 - Backslashes must be \\\\
 
 {
-  "chapterText": "The full chapter prose (900-1100 words). Use \\n for paragraph breaks, not literal newlines.",
+  "chapterText": "The full chapter prose (700-900 words). Use \\n for paragraph breaks, not literal newlines.",
   "choices": [{"label": "Choice 1"}, {"label": "Choice 2"}],
   "localSummary": "1-2 sentence chapter summary",
   "updatedStorySummaryShort": "Updated 2-3 sentence story summary",
@@ -445,7 +432,7 @@ Respond with ONLY a complete, valid JSON object. You MUST properly escape all sp
 ${isForceEnding || stage === 'resolution' ? 'For this ending, set "isEnding": true and "choices": []' : 'Set "isEnding": false unless this is a natural conclusion.'}
 
 CRITICAL:
-- Write a FULL chapter of 900-1100 words
+- Write a FULL chapter of 700-900 words
 - Use \\n for paragraph breaks in chapterText, NOT literal newlines
 - Ensure the JSON is valid and parseable
 - Close all brackets and quotes properly`;
@@ -453,7 +440,7 @@ CRITICAL:
 function buildContinuationUserContent(recentNodes, chosenLabel, userHint) {
     const contextNodes = recentNodes.slice(-2);
     const recentContext = contextNodes
-        .map((n, i) => `[Previous Chapter ${i + 1}]:\n${n.text.substring(0, 1500)}${n.text.length > 1500 ? '...' : ''}`)
+        .map((n, i) => `[Previous Chapter ${i + 1}]:\n${n.text.substring(0, MAX_CONTEXT_CHARS)}${n.text.length > MAX_CONTEXT_CHARS ? '...' : ''}`)
         .join('\n\n');
     let content = `Continue the story based on the reader's choice.
 
@@ -470,7 +457,7 @@ USER HINT (optional guidance):
     }
     content += `
 
-Write the next full chapter (900-1100 words), picking up immediately after the choice. Show the consequences of this decision and advance the plot according to the chapter outline.`;
+Write the next full chapter (700-900 words), picking up immediately after the choice. Show the consequences of this decision and advance the plot according to the chapter outline.`;
     return content;
 }
 function buildChoices(labels) {
@@ -545,8 +532,16 @@ async function archiveCompletedStory(story) {
 async function archiveCompletedStoryById(storyId) {
     const story = await (0, repository_1.getStoryById)(storyId);
     if (!story) {
-        console.warn('[StoryEngine] Story not found for archiving', { storyId });
+        console.log('[StoryEngine] Story not found for archiving', { storyId });
         return null;
+    }
+    if (story.status !== 'completed') {
+        console.log('[StoryEngine] Story not completed, skipping archive', { storyId, status: story.status });
+        return null;
+    }
+    if (story.isArchived && story.contentS3Key) {
+        console.log('[StoryEngine] Story already archived', { storyId, s3Key: story.contentS3Key });
+        return story.contentS3Key;
     }
     return archiveCompletedStory(story);
 }
@@ -794,15 +789,7 @@ async function generateNextChapter(storyId, profileId, userHint) {
             isEnding
         });
         if (isEnding) {
-            try {
-                await archiveCompletedStory(updatedStory);
-            }
-            catch (archiveError) {
-                console.error('[StoryEngine] Failed to archive completed story', {
-                    storyId,
-                    error: archiveError instanceof Error ? archiveError.message : 'Unknown error',
-                });
-            }
+            console.log('[StoryEngine] Story completed, archiving will be handled by stream', { storyId });
         }
         return { story: updatedStory, newNode };
     }

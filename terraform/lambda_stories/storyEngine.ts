@@ -675,6 +675,16 @@ export async function archiveCompletedStory(story: Story): Promise<string> {
   return s3Key;
 }
 
+export async function archiveCompletedStoryById(storyId: string): Promise<string | null> {
+  const story = await getStoryById(storyId);
+  if (!story) {
+    console.warn('[StoryEngine] Story not found for archiving', { storyId });
+    return null;
+  }
+
+  return archiveCompletedStory(story);
+}
+
 export async function getArchivedStory(storyId: string): Promise<ArchivedStory | null> {
   const story = await getStoryById(storyId);
   if (!story) return null;
