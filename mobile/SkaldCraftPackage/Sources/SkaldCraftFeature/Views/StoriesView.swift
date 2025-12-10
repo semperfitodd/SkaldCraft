@@ -72,69 +72,90 @@ struct StoriesView: View {
     private var content: some View {
         if !isAdultProfile {
             restrictedView
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
         } else if isLoading {
-            ProgressView()
-                .tint(.white)
+            VStack(spacing: 16) {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.2)
+                Text("Loading your stories...")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .transition(.opacity)
         } else if let error {
             errorView(error)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
         } else if stories.isEmpty {
             emptyView
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
         } else {
             storiesList
+                .transition(.opacity)
         }
     }
     
     private var restrictedView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 64))
+                .foregroundStyle(.orange.opacity(0.6))
+                .shadow(color: Color.orange.opacity(0.3), radius: 10, x: 0, y: 5)
             
             Text("Stories are currently available only for adult profiles.")
-                .font(.body)
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 40)
+                .lineSpacing(4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private var emptyView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Image(systemName: "book.closed")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 68))
+                .foregroundStyle(.orange.opacity(0.7))
+                .shadow(color: Color.orange.opacity(0.3), radius: 12, x: 0, y: 6)
             
             Text("No stories yet")
-                .font(.title2)
-                .fontWeight(.semibold)
+                .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(.white)
             
             Text("Create your first interactive story!")
-                .font(.body)
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.secondary)
+                .lineSpacing(4)
             
             Button {
                 showNewStorySheet = true
             } label: {
-                Label("Start Your First Story", systemImage: "plus")
-                    .font(.headline)
+                Label("Start Your First Story", systemImage: "plus.circle.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 14)
             }
             .buttonStyle(.borderedProminent)
             .tint(.orange)
-            .padding(.top, 8)
+            .shadow(color: Color.orange.opacity(0.4), radius: 10, x: 0, y: 5)
+            .padding(.top, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private var storiesList: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(stories) { story in
-                    StoryRowView(story: story)
-                        .onTapGesture {
-                            Task { await selectStory(story) }
-                        }
+            LazyVStack(spacing: 14) {
+                ForEach(Array(stories.enumerated()), id: \.element.id) { index, story in
+                    StoryRowView(story: story) {
+                        Task { await selectStory(story) }
+                    }
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 20)),
+                        removal: .opacity
+                    ))
+                    .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.05), value: stories.count)
                 }
             }
             .padding()
@@ -180,47 +201,30 @@ struct StoriesView: View {
     }
     
     private func selectStory(_ story: Story) async {
-        guard let idToken = authService.idToken else {
-            print("[StoriesView] No idToken available")
-            return
-        }
-        
-        print("[StoriesView] Selecting story: \(story.storyId), status: \(story.status.rawValue), isArchived: \(story.isArchived ?? false)")
+        guard let idToken = authService.idToken else { return }
         
         do {
             var currentStory = story
             
-            // First, always fetch the latest story state to check if it's still generating
             if currentStory.status.isGenerating {
-                print("[StoriesView] Story shows as generating, checking current state...")
                 let latestStory = try await APIService.fetchStory(idToken: idToken, storyId: story.storyId)
                 currentStory = latestStory
-                print("[StoriesView] Latest status: \(latestStory.status.rawValue)")
             }
             
-            // If story is still generating after checking, poll until ready
             if currentStory.status.isGenerating {
-                print("[StoriesView] Story is still generating, polling...")
                 let storyState = try await APIService.pollStoryReady(idToken: idToken, initialStory: currentStory)
                 currentStory = storyState.story
                 selectedStory = storyState.story
                 currentNode = storyState.currentNode
             } else if currentStory.status == .completed && currentStory.isArchived == true {
-                print("[StoriesView] Story is completed and archived, loading archive...")
-                // For completed/archived stories, just set the story and let StoryReaderView load the archive
                 selectedStory = currentStory
                 currentNode = nil
             } else {
-                print("[StoriesView] Story is in-progress, fetching current state...")
-                // For in-progress stories, fetch the current state
                 let storyState = try await APIService.fetchStoryCurrent(idToken: idToken, storyId: story.storyId)
                 selectedStory = storyState.story
                 currentNode = storyState.currentNode
             }
-            
-            print("[StoriesView] Story selected successfully")
         } catch {
-            print("[StoriesView] Error selecting story: \(error)")
             self.error = error
         }
     }
@@ -228,41 +232,57 @@ struct StoriesView: View {
 
 struct StoryRowView: View {
     let story: Story
+    let action: () -> Void
     
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(story.title)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                
-                HStack(spacing: 12) {
-                    statusBadge
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(story.title)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
                     
-                    Text(story.config.genre)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    Text(formatDate(story.updatedAt))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        statusBadge
+                        
+                        Text(story.config.genre)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        
+                        Text(formatDate(story.updatedAt))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.orange.opacity(0.8))
             }
-            
-            Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.body)
-                .foregroundStyle(.secondary)
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(0.1))
+                    .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            )
         }
-        .padding()
-        .background(Color.white.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
+        .buttonStyle(StoryRowButtonStyle())
+    }
+    
+    struct StoryRowButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+                .opacity(configuration.isPressed ? 0.9 : 1.0)
+                .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+        }
     }
     
     @ViewBuilder

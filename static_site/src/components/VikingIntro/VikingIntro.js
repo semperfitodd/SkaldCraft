@@ -1,27 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './VikingIntro.css';
+
+const EXIT_ANIMATION_DURATION = 500;
+const AUTO_COMPLETE_DURATION = 10000;
 
 function VikingIntro({ onComplete }) {
   const [isVisible, setIsVisible] = useState(true);
   const [isAnimating, setIsAnimating] = useState(true);
 
-  const handleComplete = () => {
+  const handleComplete = useCallback(() => {
     setIsAnimating(false);
     setTimeout(() => {
       setIsVisible(false);
       onComplete();
-    }, 500);
-  };
+    }, EXIT_ANIMATION_DURATION);
+  }, [onComplete]);
 
   useEffect(() => {
-    // Auto-complete after 10 seconds
     const timer = setTimeout(() => {
       handleComplete();
-    }, 10000);
+    }, AUTO_COMPLETE_DURATION);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [handleComplete]);
 
   if (!isVisible) return null;
 
@@ -29,7 +30,6 @@ function VikingIntro({ onComplete }) {
     <div className={`viking-intro ${isAnimating ? 'viking-intro--active' : 'viking-intro--exit'}`}>
       <div className="viking-intro__content">
         <div className="viking-intro__scene">
-          {/* Campfire */}
           <div className="viking-intro__campfire">
             <div className="viking-intro__flame viking-intro__flame--1"></div>
             <div className="viking-intro__flame viking-intro__flame--2"></div>
@@ -37,7 +37,6 @@ function VikingIntro({ onComplete }) {
             <div className="viking-intro__logs"></div>
           </div>
 
-          {/* Viking silhouette */}
           <div className="viking-intro__viking">
             <div className="viking-intro__viking-body">
               <div className="viking-intro__viking-head">
@@ -57,7 +56,6 @@ function VikingIntro({ onComplete }) {
             </div>
           </div>
 
-          {/* Floating runes */}
           <div className="viking-intro__runes">
             <span className="viking-intro__rune" style={{ '--delay': '0s' }}>ᚠ</span>
             <span className="viking-intro__rune" style={{ '--delay': '0.3s' }}>ᚢ</span>

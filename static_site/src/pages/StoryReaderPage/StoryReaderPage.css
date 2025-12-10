@@ -35,6 +35,12 @@
   box-shadow: 4px 0 12px rgba(0, 0, 0, 0.2);
 }
 
+.story-reader__sidebar-toggle--open {
+  left: 320px;
+  background: var(--color-primary-light);
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
 .story-reader__sidebar {
   width: 320px;
   min-width: 320px;

@@ -19,16 +19,16 @@ function HomePage({
   const [error, setError] = useState(null);
   const [showIntro, setShowIntro] = useState(false);
 
-  // Check if we should show the intro
+  // Check if we should show the intro (per session)
   useEffect(() => {
-    const hasSeenIntro = localStorage.getItem('skaldcraft_intro_seen');
-    if (!hasSeenIntro) {
+    const hasSeenIntroThisSession = sessionStorage.getItem('skaldcraft_intro_seen');
+    if (!hasSeenIntroThisSession) {
       setShowIntro(true);
     }
   }, []);
 
   const handleIntroComplete = () => {
-    localStorage.setItem('skaldcraft_intro_seen', 'true');
+    sessionStorage.setItem('skaldcraft_intro_seen', 'true');
     setShowIntro(false);
   };
 
