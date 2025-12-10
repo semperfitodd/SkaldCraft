@@ -83,3 +83,4 @@ function VikingIntro({ onComplete }) {
 }
 
 export default VikingIntro;
+

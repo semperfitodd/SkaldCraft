@@ -108,6 +108,11 @@ function StoryReaderPage({
     setSelectedChapterIndex(chapterIndex);
     setError(null);
     
+    // Close sidebar on mobile after selecting a chapter
+    if (window.innerWidth <= DESKTOP_BREAKPOINT) {
+      setSidebarOpen(false);
+    }
+    
     if (contentRef.current) {
       contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -226,12 +231,19 @@ function StoryReaderPage({
   return (
     <Layout header={header}>
       <div className="story-reader story-reader--two-pane">
+        {sidebarOpen && window.innerWidth <= DESKTOP_BREAKPOINT && (
+          <div 
+            className="story-reader__sidebar-backdrop"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         <button 
           className={`story-reader__sidebar-toggle ${sidebarOpen ? 'story-reader__sidebar-toggle--open' : ''}`}
           onClick={() => setSidebarOpen(!sidebarOpen)}
           title={sidebarOpen ? 'Hide chapters' : 'Show chapters'}
         >
-          {sidebarOpen ? '◀' : '▶'}
+          {sidebarOpen ? '✕' : '▶'}
         </button>
 
         <aside className={`story-reader__sidebar ${sidebarOpen ? 'story-reader__sidebar--open' : ''}`}>

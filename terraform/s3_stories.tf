@@ -85,3 +85,4 @@ resource "aws_iam_policy" "lambda_stories_s3" {
 }
 
 
+

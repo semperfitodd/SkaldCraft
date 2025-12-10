@@ -31,3 +31,4 @@ export const CORS_HEADERS = {
 
 export const ADULT_AGE_THRESHOLD = 18;
 
+
