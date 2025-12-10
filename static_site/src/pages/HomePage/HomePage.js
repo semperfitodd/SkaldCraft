@@ -10,7 +10,8 @@ function HomePage({
   activeProfile, 
   onSelectProfile, 
   onProfilesChange,
-  onNavigateToProfile 
+  onNavigateToProfile,
+  onNavigateToStories,
 }) {
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -86,6 +87,12 @@ function HomePage({
           onAddProfile={() => setShowAddChild(true)}
           onEditProfile={(child) => setEditingChild(child)}
         />
+        <button 
+          className="home-page__profile-btn"
+          onClick={onNavigateToStories}
+        >
+          Stories
+        </button>
         <button 
           className="home-page__profile-btn"
           onClick={onNavigateToProfile}

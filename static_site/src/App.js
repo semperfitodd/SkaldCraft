@@ -1,23 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks';
-import { Loading } from './components';
-import { LoginPage, HomePage, OnboardingPage, ProfilePage } from './pages';
+import { Loading, NewStoryModal } from './components';
+import { LoginPage, HomePage, OnboardingPage, ProfilePage, StoriesPage, StoryReaderPage } from './pages';
 import { fetchProfile, fetchProfiles } from './utils/api';
 
 const VIEW = {
   HOME: 'home',
   ONBOARDING: 'onboarding',
   PROFILE: 'profile',
+  STORIES: 'stories',
+  STORY_READER: 'story_reader',
 };
 
 function App() {
   const { authenticated, loading: authLoading, error: authError } = useAuth();
   const [profile, setProfile] = useState(null);
-  const [profiles, setProfiles] = useState(null); // { parent, children }
+  const [profiles, setProfiles] = useState(null);
   const [activeProfile, setActiveProfile] = useState({ type: 'adult', profileId: null });
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState(null);
   const [currentView, setCurrentView] = useState(VIEW.HOME);
+  const [showNewStoryModal, setShowNewStoryModal] = useState(false);
+  const [currentStoryId, setCurrentStoryId] = useState(null);
+  const [currentStory, setCurrentStory] = useState(null);
+  const [currentNode, setCurrentNode] = useState(null);
 
   const loadProfiles = useCallback(async () => {
     try {
@@ -59,6 +65,32 @@ function App() {
     await loadProfiles();
   };
 
+  const handleNavigateToStories = () => {
+    setCurrentView(VIEW.STORIES);
+    setCurrentStoryId(null);
+    setCurrentStory(null);
+    setCurrentNode(null);
+  };
+
+  const handleNavigateToStory = (storyId) => {
+    setCurrentStoryId(storyId);
+    setCurrentStory(null);
+    setCurrentNode(null);
+    setCurrentView(VIEW.STORY_READER);
+  };
+
+  const handleStoryCreated = (result) => {
+    setShowNewStoryModal(false);
+    setCurrentStoryId(result.story.storyId);
+    setCurrentStory(result.story);
+    setCurrentNode(result.rootNode);
+    setCurrentView(VIEW.STORY_READER);
+  };
+
+  const handleStartNewStory = () => {
+    setShowNewStoryModal(true);
+  };
+
   if (authLoading) return <Loading />;
   if (authError) return <Loading message={authError} />;
   if (!authenticated) return <LoginPage />;
@@ -79,6 +111,50 @@ function App() {
     );
   }
 
+  if (currentView === VIEW.STORIES) {
+    return (
+      <>
+        <StoriesPage
+          profile={profile}
+          activeProfile={activeProfile}
+          onNavigateToHome={() => setCurrentView(VIEW.HOME)}
+          onNavigateToStory={handleNavigateToStory}
+          onStartNewStory={handleStartNewStory}
+        />
+        {showNewStoryModal && (
+          <NewStoryModal
+            profileId={profile?.email}
+            preferredGenres={profile?.profile?.preferredGenres}
+            onClose={() => setShowNewStoryModal(false)}
+            onStoryCreated={handleStoryCreated}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (currentView === VIEW.STORY_READER && currentStoryId) {
+    return (
+      <>
+        <StoryReaderPage
+          storyId={currentStoryId}
+          initialStory={currentStory}
+          initialNode={currentNode}
+          onNavigateToStories={handleNavigateToStories}
+          onStartNewStory={handleStartNewStory}
+        />
+        {showNewStoryModal && (
+          <NewStoryModal
+            profileId={profile?.email}
+            preferredGenres={profile?.profile?.preferredGenres}
+            onClose={() => setShowNewStoryModal(false)}
+            onStoryCreated={handleStoryCreated}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <HomePage 
       profile={profile}
@@ -87,6 +163,7 @@ function App() {
       onSelectProfile={handleSelectProfile}
       onProfilesChange={handleProfilesChange}
       onNavigateToProfile={() => setCurrentView(VIEW.PROFILE)}
+      onNavigateToStories={handleNavigateToStories}
     />
   );
 }
