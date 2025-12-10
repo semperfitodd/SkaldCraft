@@ -1,9 +1,9 @@
-module "lambda_api" {
+module "lambda_profiles" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
-  function_name = "${var.environment}_api"
-  description   = "${replace(var.environment, "_", " ")} API function"
+  function_name = "${var.environment}_profiles"
+  description   = "User and child profile management"
   handler       = "index.handler"
   publish       = true
   runtime       = "nodejs20.x"
@@ -17,7 +17,7 @@ module "lambda_api" {
 
   source_path = [
     {
-      path             = "${path.module}/lambda_api"
+      path             = "${path.module}/lambda_profiles"
       npm_requirements = true
       commands = [
         "npm install",
@@ -31,7 +31,7 @@ module "lambda_api" {
   number_of_policies = 2
   policies = [
     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-    aws_iam_policy.lambda_dynamodb.arn
+    aws_iam_policy.lambda_profiles_dynamodb.arn
   ]
 
   allowed_triggers = {
@@ -46,9 +46,9 @@ module "lambda_api" {
   tags = var.tags
 }
 
-resource "aws_iam_policy" "lambda_dynamodb" {
-  name        = "${var.environment}_lambda_dynamodb"
-  description = "Allow Lambda to access DynamoDB Users and ChildProfiles tables"
+resource "aws_iam_policy" "lambda_profiles_dynamodb" {
+  name        = "${var.environment}_lambda_profiles_dynamodb"
+  description = "Allow Profiles Lambda to access Users and ChildProfiles tables"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -85,3 +85,4 @@ resource "aws_iam_policy" "lambda_dynamodb" {
 
   tags = var.tags
 }
+

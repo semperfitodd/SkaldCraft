@@ -3,7 +3,7 @@ module "api_gateway" {
   version = "~> 6.0"
 
   name          = var.environment
-  description   = "HTTP API Gateway for ${var.environment} environment"
+  description   = "HTTP API Gateway for ${var.environment}"
   protocol_type = "HTTP"
 
   cors_configuration = {
@@ -58,7 +58,7 @@ module "api_gateway" {
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_api.lambda_function_arn
+        uri                    = module.lambda_profiles.lambda_function_arn
         payload_format_version = "2.0"
       }
     }
@@ -68,7 +68,7 @@ module "api_gateway" {
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_api.lambda_function_arn
+        uri                    = module.lambda_profiles.lambda_function_arn
         payload_format_version = "2.0"
       }
     }
@@ -78,7 +78,7 @@ module "api_gateway" {
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_api.lambda_function_arn
+        uri                    = module.lambda_profiles.lambda_function_arn
         payload_format_version = "2.0"
       }
     }
@@ -88,18 +88,17 @@ module "api_gateway" {
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_api.lambda_function_arn
+        uri                    = module.lambda_profiles.lambda_function_arn
         payload_format_version = "2.0"
       }
     }
 
-    # Profiles routes for parent + child profiles
     "GET /profiles" = {
       authorization_type = "JWT"
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_api.lambda_function_arn
+        uri                    = module.lambda_profiles.lambda_function_arn
         payload_format_version = "2.0"
       }
     }
@@ -109,7 +108,7 @@ module "api_gateway" {
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_api.lambda_function_arn
+        uri                    = module.lambda_profiles.lambda_function_arn
         payload_format_version = "2.0"
       }
     }
@@ -119,7 +118,7 @@ module "api_gateway" {
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_api.lambda_function_arn
+        uri                    = module.lambda_profiles.lambda_function_arn
         payload_format_version = "2.0"
       }
     }
@@ -129,7 +128,157 @@ module "api_gateway" {
       authorizer_key     = "cognito"
       integration = {
         method                 = "POST"
-        uri                    = module.lambda_api.lambda_function_arn
+        uri                    = module.lambda_profiles.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /stories" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "POST /stories" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "POST /stories/adult" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /stories/{storyId}" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "PUT /stories/{storyId}" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "DELETE /stories/{storyId}" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "POST /stories/{storyId}/continue" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /stories/{storyId}/nodes" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "POST /stories/{storyId}/nodes" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /stories/{storyId}/nodes/root" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /stories/{storyId}/nodes/{nodeId}" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "PUT /stories/{storyId}/nodes/{nodeId}" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /stories/{storyId}/current" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /stories/{storyId}/archive" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "GET /stories/{storyId}/chapters/{chapterIndex}" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_stories.lambda_function_arn
         payload_format_version = "2.0"
       }
     }

@@ -10,6 +10,10 @@ struct HomeView: View {
     @State private var showOnboarding = false
     @State private var showSettings = false
     @State private var showProfiles = false
+    @State private var showStories = false
+    @State private var selectedStory: Story?
+    @State private var currentNode: StoryNode?
+    @State private var showNewStorySheet = false
 
     var body: some View {
         NavigationStack {
@@ -23,6 +27,11 @@ struct HomeView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button {
+                            showStories = true
+                        } label: {
+                            Label("Stories", systemImage: "book")
+                        }
                         if profiles != nil {
                             Button {
                                 showProfiles = true
@@ -52,6 +61,33 @@ struct HomeView: View {
             }
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(Color.background.opacity(0.9), for: .navigationBar)
+            .navigationDestination(isPresented: $showStories) {
+                if selectedStory != nil {
+                    StoryReaderView(
+                        story: $selectedStory,
+                        currentNode: $currentNode,
+                        onBack: {
+                            selectedStory = nil
+                            currentNode = nil
+                        },
+                        onStartNewStory: {
+                            selectedStory = nil
+                            currentNode = nil
+                            showNewStorySheet = true
+                        }
+                    )
+                    .environment(authService)
+                } else {
+                    StoriesView(
+                        profile: profile,
+                        profiles: profiles,
+                        activeProfile: activeProfile,
+                        selectedStory: $selectedStory,
+                        currentNode: $currentNode
+                    )
+                    .environment(authService)
+                }
+            }
         }
         .task { await fetchAllData() }
         .fullScreenCover(isPresented: $showOnboarding) {
@@ -78,6 +114,23 @@ struct HomeView: View {
                 activeProfile: $activeProfile
             )
             .environment(authService)
+        }
+        .sheet(isPresented: $showNewStorySheet) {
+            NewAdultStoryView(
+                profileId: profile?.email ?? "",
+                preferredGenres: profile?.profile.preferredGenres ?? [],
+                onStoryCreated: { story, node in
+                    selectedStory = story
+                    currentNode = node
+                    showNewStorySheet = false
+                }
+            )
+            .environment(authService)
+        }
+        .onChange(of: selectedStory) { _, newStory in
+            if newStory != nil && !showStories {
+                showStories = true
+            }
         }
     }
 

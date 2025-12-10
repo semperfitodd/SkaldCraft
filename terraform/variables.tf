@@ -1,6 +1,43 @@
+variable "adult_story_model_id" {
+  description = "AWS Bedrock model ID for adult story generation"
+  type        = string
+  default     = null
+}
+
+variable "adult_summarizer_model_id" {
+  description = "AWS Bedrock model ID for story summarization (cheaper model)"
+  type        = string
+  default     = null
+}
+
 variable "app_name" {
   description = "Application name for Cognito pool and mobile deep links"
   type        = string
+}
+
+variable "apple_app_id" {
+  description = "Apple Services ID for Sign in with Apple"
+  type        = string
+  default     = null
+}
+
+variable "apple_key_id" {
+  description = "Apple Key ID for Sign in with Apple"
+  type        = string
+  default     = null
+}
+
+variable "apple_private_key" {
+  description = "Base64 encoded Apple private key"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "apple_team_id" {
+  description = "Apple Team ID for Sign in with Apple"
+  type        = string
+  default     = null
 }
 
 variable "domain" {
@@ -21,6 +58,19 @@ variable "environment" {
   }
 }
 
+variable "google_client_id" {
+  description = "Google OAuth Client ID"
+  type        = string
+  default     = null
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
 variable "region" {
   description = "AWS region for all resources"
   type        = string
@@ -36,46 +86,3 @@ variable "tags" {
   default     = {}
 }
 
-variable "bedrock_model_id" {
-  description = "AWS Bedrock model ID for AI analysis"
-  type        = string
-  default     = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
-}
-
-variable "apple_app_id" {
-  description = "Apple Services ID for Sign in with Apple"
-  type        = string
-  default     = ""
-}
-
-variable "apple_key_id" {
-  description = "Apple Key ID for Sign in with Apple"
-  type        = string
-  default     = ""
-}
-
-variable "apple_private_key" {
-  description = "Base64 encoded Apple private key"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "apple_team_id" {
-  description = "Apple Team ID for Sign in with Apple"
-  type        = string
-  default     = ""
-}
-
-variable "google_client_id" {
-  description = "Google OAuth Client ID"
-  type        = string
-  default     = ""
-}
-
-variable "google_client_secret" {
-  description = "Google OAuth Client Secret"
-  type        = string
-  sensitive   = true
-  default     = ""
-}

@@ -5,4 +5,5 @@ export { default as Logo } from './Logo';
 export { default as ProfileForm } from './ProfileForm';
 export { default as ProfilesMenu } from './ProfilesMenu';
 export { default as ChildProfileForm } from './ChildProfileForm';
+export { default as NewStoryModal } from './NewStoryModal';
 export { AppleIcon, GoogleIcon } from './icons';
