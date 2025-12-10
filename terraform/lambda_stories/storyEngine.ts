@@ -4,6 +4,7 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
+import * as yaml from 'js-yaml';
 import type {
   Story,
   StoryNode,
@@ -149,32 +150,36 @@ function isRetryableError(error: unknown): boolean {
   const message = error.message.toLowerCase();
   const name = error.name?.toLowerCase() || '';
   
+  // Tightened to focus on throttling, 5xx, and clear connection issues
   return (
     message.includes('throttl') ||
     message.includes('rate limit') ||
     message.includes('too many requests') ||
     message.includes('service unavailable') ||
     message.includes('internal server error') ||
+    message.includes('503') ||
+    message.includes('502') ||
     message.includes('timeout') ||
     message.includes('econnreset') ||
-    message.includes('network') ||
     name.includes('throttling') ||
     name.includes('serviceunavailable')
   );
 }
 
-async function invokeBedrockJSON<T>(
+const MAX_TOKENS = 2800;
+
+async function invokeBedrockYAML<T>(
   modelId: string,
   systemPrompt: string,
   userContent: string,
   storyId: string,
   profileId: string,
-  maxRetries = 3
+  maxRetries = 2
 ): Promise<T> {
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const backoffMs = attempt > 0 ? Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, 10000) : 0;
+    const backoffMs = attempt > 0 ? Math.min(500 + Math.random() * 1000, 1500) : 0;
     if (backoffMs > 0) {
       console.log('[StoryEngine] Retrying after backoff', { storyId, profileId, attempt, backoffMs: Math.round(backoffMs) });
       await sleep(backoffMs);
@@ -188,7 +193,7 @@ async function invokeBedrockJSON<T>(
       accept: 'application/json',
       body: JSON.stringify({
         anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 8192,
+        max_tokens: MAX_TOKENS,
         temperature: attempt > 0 ? 0.5 : 0.9,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
@@ -234,49 +239,56 @@ async function invokeBedrockJSON<T>(
       throw lastError;
     }
 
-    let jsonStr = textContent.trim();
-    if (jsonStr.startsWith('```json')) jsonStr = jsonStr.slice(7);
-    else if (jsonStr.startsWith('```')) jsonStr = jsonStr.slice(3);
-    if (jsonStr.endsWith('```')) jsonStr = jsonStr.slice(0, -3);
-    jsonStr = jsonStr.trim();
-
-    let fixedJson = jsonStr;
+    let yamlStr = textContent.trim();
     
-    // Fix unescaped newlines, carriage returns, and tabs within string values
-    // This regex matches quoted strings and replaces literal newlines/tabs with escaped versions
-    const stringRegex = /"(?:[^"\\]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*"/g;
-    const strings: string[] = [];
-    let stringIndex = 0;
+    // Strip markdown code fences if present
+    if (yamlStr.startsWith('```yaml') || yamlStr.startsWith('```yml')) {
+      yamlStr = yamlStr.slice(yamlStr.indexOf('\n') + 1);
+    } else if (yamlStr.startsWith('```')) {
+      yamlStr = yamlStr.slice(3);
+    }
+    if (yamlStr.endsWith('```')) {
+      yamlStr = yamlStr.slice(0, -3);
+    }
+    yamlStr = yamlStr.trim();
     
-    // Extract all strings, fix them, and replace with placeholders
-    fixedJson = fixedJson.replace(stringRegex, (match: string) => {
-      const fixed = match
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r')
-        .replace(/\t/g, '\\t');
-      strings.push(fixed);
-      return `__STRING_${stringIndex++}__`;
-    });
+    // Handle case where model adds preamble text before YAML
+    // Look for common YAML starting patterns
+    const yamlPatterns = [/^[a-zA-Z_]+:/, /^-\s+/];
+    let yamlStart = 0;
+    for (const pattern of yamlPatterns) {
+      const match = yamlStr.match(pattern);
+      if (match && match.index !== undefined) {
+        yamlStart = match.index;
+        break;
+      }
+    }
     
-    // Put the fixed strings back
-    stringIndex = 0;
-    fixedJson = fixedJson.replace(/__STRING_\d+__/g, () => strings[stringIndex++]);
+    if (yamlStart > 0) {
+      console.log('[StoryEngine] Stripping preamble text before YAML', { 
+        storyId, 
+        preambleLength: yamlStart,
+        preamble: yamlStr.substring(0, Math.min(yamlStart, 100))
+      });
+      yamlStr = yamlStr.substring(yamlStart);
+    }
 
     try {
-      return JSON.parse(fixedJson) as T;
+      const parsed = yaml.load(yamlStr);
+      return parsed as T;
     } catch (parseError) {
       const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
-      console.error('[StoryEngine] JSON parse failed', { 
+      
+      console.error('[StoryEngine] YAML parse failed', { 
         storyId, 
         profileId, 
         attempt,
         parseError: errorMessage,
-        textLength: textContent.length,
-        textPreview: textContent.substring(0, 300),
-        textEnd: textContent.substring(Math.max(0, textContent.length - 100)),
-        rawJson: jsonStr.length < 6000 ? jsonStr : 'too long to log',
+        textLength: yamlStr.length,
+        textPreview: yamlStr.substring(0, 300),
+        textEnd: yamlStr.substring(Math.max(0, yamlStr.length - 100)),
       });
-      lastError = new Error(`Failed to parse AI response as JSON: ${errorMessage}`);
+      lastError = new Error(`Failed to parse AI response as YAML: ${errorMessage}`);
       if (attempt < maxRetries - 1) continue;
     }
   }
@@ -350,23 +362,25 @@ OUTLINE REQUIREMENTS:
 - Titles should be evocative but not spoil specific plot points
 
 OUTPUT FORMAT - CRITICAL:
-Respond with ONLY a complete, valid JSON object. Ensure all string values are properly escaped:
-- Use \\n for line breaks (not literal newlines)
-- Use \\" for quotes within strings
-- Use \\\\ for backslashes
+Respond with ONLY valid YAML. NO explanatory text, preamble, or commentary.
+Use the pipe | character for multiline strings (no escaping needed).
 
-{
-  "outline": [
-    {"chapterIndex": 1, "title": "Chapter 1: [Title]", "description": "What happens in this chapter."},
-    {"chapterIndex": 2, "title": "Chapter 2: [Title]", "description": "What happens in this chapter."}
-  ],
-  "suggestedTitle": "A compelling title for the overall story"
-}
+Example format:
+
+outline:
+  - chapterIndex: 1
+    title: "Chapter 1: The Beginning"
+    description: "What happens in this chapter."
+  - chapterIndex: 2
+    title: "Chapter 2: Rising Tension"
+    description: "What happens in this chapter."
+suggestedTitle: "A compelling title for the overall story"
 
 CRITICAL:
+- Start immediately with YAML (no preamble)
 - Include exactly ${targetNodeCount} chapters
-- Ensure the JSON is valid and parseable
-- Close all brackets and quotes properly`;
+- Use proper YAML syntax with 2-space indentation
+- Use quotes around titles and descriptions`;
 }
 
 function buildOutlineUserContent(options: CreateAdultStoryOptions, config: StoryConfig): string {
@@ -408,7 +422,7 @@ ${outline.map(ch => `${ch.title}: ${ch.description}`).join('\n')}
 ${getContentGuidelines(config.explicitContentAllowed)}
 
 CHAPTER REQUIREMENTS:
-- Write 900-1100 words of engaging prose
+- Write 700-900 words of engaging prose
 - This is a FULL CHAPTER, not a short scene - develop it thoroughly
 - Cover the major beat described in the chapter assignment
 - Establish characters, setting, and initial situation
@@ -424,27 +438,32 @@ WRITING GUIDELINES:
 - Each choice should lead to genuinely different paths
 
 OUTPUT FORMAT - CRITICAL:
-Respond with ONLY a complete, valid JSON object. You MUST properly escape all special characters in string values:
-- Newlines must be \\n (not literal line breaks)
-- Quotes must be \\"
-- Backslashes must be \\\\
+Respond with ONLY valid YAML. NO explanatory text, preamble, or commentary.
+Use the pipe | character for multiline text (no escaping needed).
 
-{
-  "chapterText": "The full chapter prose (900-1100 words). Use \\n for paragraph breaks, not literal newlines.",
-  "choices": [{"label": "Choice 1 (5-15 words)"}, {"label": "Choice 2 (5-15 words)"}],
-  "localSummary": "1-2 sentence chapter summary",
-  "storySummaryShort": "2-3 sentence overall story summary",
-  "charactersSummary": "Key characters introduced (names, roles, traits)",
-  "settingSummary": "Setting and world details established",
-  "conflictSummary": "Central conflict or tension introduced",
-  "themeNotes": "Thematic elements being explored"
-}
+Example format:
+
+chapterText: |
+  The full chapter prose (700-900 words).
+  
+  Use natural paragraph breaks.
+  
+  "Quotes work naturally without escaping."
+choices:
+  - label: "Choice 1 (5-15 words)"
+  - label: "Choice 2 (5-15 words)"
+localSummary: "1-2 sentence chapter summary"
+storySummaryShort: "2-3 sentence overall story summary"
+charactersSummary: "Key characters introduced (names, roles, traits)"
+settingSummary: "Setting and world details established"
+conflictSummary: "Central conflict or tension introduced"
+themeNotes: "Thematic elements being explored"
 
 CRITICAL: 
-- Write a FULL chapter of 900-1100 words
-- Use \\n for paragraph breaks in chapterText, NOT literal newlines
-- Ensure the JSON is valid and parseable
-- Close all brackets and quotes properly`;
+- Start immediately with YAML (no preamble)
+- Write a FULL chapter of 700-900 words
+- Use proper YAML syntax with 2-space indentation
+- Use pipe | for chapterText multiline content`;
 }
 
 function buildRootChapterUserContent(options: CreateAdultStoryOptions, config: StoryConfig): string {
@@ -457,7 +476,7 @@ function buildRootChapterUserContent(options: CreateAdultStoryOptions, config: S
 PREMISE:
 ${premise}
 
-Create an immersive opening chapter that establishes the story world and hooks the reader. Remember to write 900-1100 words and end with meaningful choices.`;
+Create an immersive opening chapter that establishes the story world and hooks the reader. Remember to write 700-900 words and end with meaningful choices.`;
 }
 
 function buildContinuationSystemPrompt(
@@ -513,8 +532,15 @@ CHAPTER ASSIGNMENT:
 - Story Stage: ${stage.toUpperCase().replace('_', ' ')}
 - Progress: Chapter ${currentChapterIndex + 1} of ${targetNodeCount}
 
-FULL STORY OUTLINE (for context):
-${outline.map(ch => `${ch.title}: ${ch.description}`).join('\n')}
+STORY OUTLINE (relevant context):
+${(() => {
+  const start = Math.max(0, currentChapterIndex - 2);
+  const end = Math.min(outline.length, currentChapterIndex + 3);
+  return outline
+    .slice(start, end)
+    .map(ch => `${ch.title}: ${ch.description}`)
+    .join('\n');
+})()}
 ${endingInstructions}
 
 ${getContentGuidelines(config.explicitContentAllowed)}
@@ -527,7 +553,7 @@ CRITICAL RULES:
 5. Respect POV: ${config.pov}. ${getPovInstructions(config.pov)}
 
 CHAPTER REQUIREMENTS:
-- Write 900-1100 words of engaging prose
+- Write 700-900 words of engaging prose
 - This is a FULL CHAPTER - develop it thoroughly
 - Cover the beat described in the chapter assignment
 - Continue directly from the reader's choice
@@ -535,31 +561,38 @@ CHAPTER REQUIREMENTS:
 ${choicesInstruction}
 
 OUTPUT FORMAT - CRITICAL:
-Respond with ONLY a complete, valid JSON object. You MUST properly escape all special characters in string values:
-- Newlines must be \\n (not literal line breaks)
-- Quotes must be \\"
-- Backslashes must be \\\\
+Respond with ONLY valid YAML. NO explanatory text, preamble, or commentary.
+Use the pipe | character for multiline text (no escaping needed).
 
-{
-  "chapterText": "The full chapter prose (900-1100 words). Use \\n for paragraph breaks, not literal newlines.",
-  "choices": [{"label": "Choice 1"}, {"label": "Choice 2"}],
-  "localSummary": "1-2 sentence chapter summary",
-  "updatedStorySummaryShort": "Updated 2-3 sentence story summary",
-  "updatedCharactersSummary": "Updated character notes",
-  "updatedSettingSummary": "Updated setting notes",
-  "updatedConflictSummary": "Updated conflict status",
-  "updatedThemeNotes": "Updated theme notes",
-  "isEnding": ${isForceEnding || stage === 'resolution' ? 'true' : 'false'}
-}
+Example format:
 
-${isForceEnding || stage === 'resolution' ? 'For this ending, set "isEnding": true and "choices": []' : 'Set "isEnding": false unless this is a natural conclusion.'}
+chapterText: |
+  The full chapter prose (700-900 words).
+  
+  Use natural paragraph breaks.
+  
+  "Quotes work naturally without escaping."
+choices:
+  - label: "Choice 1"
+  - label: "Choice 2"
+localSummary: "1-2 sentence chapter summary"
+updatedStorySummaryShort: "Updated 2-3 sentence story summary"
+updatedCharactersSummary: "Updated character notes"
+updatedSettingSummary: "Updated setting notes"
+updatedConflictSummary: "Updated conflict status"
+updatedThemeNotes: "Updated theme notes"
+isEnding: ${isForceEnding || stage === 'resolution' ? 'true' : 'false'}
+
+${isForceEnding || stage === 'resolution' ? 'For this ending, set isEnding: true and use empty choices: []' : 'Set isEnding: false unless this is a natural conclusion.'}
 
 CRITICAL:
-- Write a FULL chapter of 900-1100 words
-- Use \\n for paragraph breaks in chapterText, NOT literal newlines
-- Ensure the JSON is valid and parseable
-- Close all brackets and quotes properly`;
+- Start immediately with YAML (no preamble)
+- Write a FULL chapter of 700-900 words
+- Use proper YAML syntax with 2-space indentation
+- Use pipe | for chapterText multiline content`;
 }
+
+const MAX_CONTEXT_CHARS = 900;
 
 function buildContinuationUserContent(
   recentNodes: StoryNode[],
@@ -568,7 +601,7 @@ function buildContinuationUserContent(
 ): string {
   const contextNodes = recentNodes.slice(-2);
   const recentContext = contextNodes
-    .map((n, i) => `[Previous Chapter ${i + 1}]:\n${n.text.substring(0, 1500)}${n.text.length > 1500 ? '...' : ''}`)
+    .map((n, i) => `[Previous Chapter ${i + 1}]:\n${n.text.substring(0, MAX_CONTEXT_CHARS)}${n.text.length > MAX_CONTEXT_CHARS ? '...' : ''}`)
     .join('\n\n');
 
   let content = `Continue the story based on the reader's choice.
@@ -588,7 +621,7 @@ USER HINT (optional guidance):
 
   content += `
 
-Write the next full chapter (900-1100 words), picking up immediately after the choice. Show the consequences of this decision and advance the plot according to the chapter outline.`;
+Write the next full chapter (700-900 words), picking up immediately after the choice. Show the consequences of this decision and advance the plot according to the chapter outline.`;
 
   return content;
 }
@@ -602,7 +635,7 @@ function buildChoices(labels: Array<{ label: string }>): StoryChoice[] {
 }
 
 function getS3Key(profileId: string, storyId: string): string {
-  return `${STORY_ARCHIVE_PREFIX}${profileId}/${storyId}.json`;
+  return `${STORY_ARCHIVE_PREFIX}${profileId}/${storyId}.yaml`;
 }
 
 export async function archiveCompletedStory(story: Story): Promise<string> {
@@ -657,8 +690,8 @@ export async function archiveCompletedStory(story: Story): Promise<string> {
   await s3Client.send(new PutObjectCommand({
     Bucket: STORY_ARCHIVE_BUCKET,
     Key: s3Key,
-    Body: JSON.stringify(archivedStory, null, 2),
-    ContentType: 'application/json',
+    Body: yaml.dump(archivedStory, { indent: 2, lineWidth: -1 }),
+    ContentType: 'application/x-yaml',
   }));
 
   console.log('[StoryEngine] Story archived to S3', { storyId: story.storyId, s3Key });
@@ -681,6 +714,16 @@ export async function archiveCompletedStoryById(storyId: string): Promise<string
     console.warn('[StoryEngine] Story not found for archiving', { storyId });
     return null;
   }
+  
+  if (story.status !== 'completed') {
+    console.warn('[StoryEngine] Story is not completed, skipping archive', { storyId, status: story.status });
+    return null;
+  }
+  
+  if (story.isArchived && story.contentS3Key) {
+    console.log('[StoryEngine] Story already archived', { storyId, s3Key: story.contentS3Key });
+    return story.contentS3Key;
+  }
 
   return archiveCompletedStory(story);
 }
@@ -702,7 +745,12 @@ export async function getArchivedStory(storyId: string): Promise<ArchivedStory |
     const bodyString = await response.Body?.transformToString();
     if (!bodyString) return null;
 
-    return JSON.parse(bodyString) as ArchivedStory;
+    // Support both YAML (new) and JSON (legacy) formats
+    if (story.contentS3Key.endsWith('.yaml') || story.contentS3Key.endsWith('.yml')) {
+      return yaml.load(bodyString) as ArchivedStory;
+    } else {
+      return JSON.parse(bodyString) as ArchivedStory;
+    }
   } catch (error) {
     console.error('[StoryEngine] Failed to get archived story', {
       storyId,
@@ -775,13 +823,15 @@ export async function generateAdultStoryContent(storyId: string, options: Create
     const outlineSystemPrompt = buildOutlineSystemPrompt(config, targetNodeCount);
     const outlineUserContent = buildOutlineUserContent(options, config);
 
-    const outlineResponse = await invokeBedrockJSON<OutlineGenerationResponse>(
+    const t0Outline = Date.now();
+    const outlineResponse = await invokeBedrockYAML<OutlineGenerationResponse>(
       ADULT_STORY_MODEL_ID,
       outlineSystemPrompt,
       outlineUserContent,
       storyId,
       options.profileId
     );
+    console.log('[StoryEngine] Bedrock outline latency (ms)', { storyId, latencyMs: Date.now() - t0Outline });
 
     if (!validateOutlineResponse(outlineResponse)) {
       console.error('[StoryEngine] Invalid outline response', { storyId });
@@ -808,13 +858,15 @@ export async function generateAdultStoryContent(storyId: string, options: Create
     const rootSystemPrompt = buildRootChapterSystemPrompt(config, outline, targetNodeCount);
     const rootUserContent = buildRootChapterUserContent(options, config);
 
-    const rootResponse = await invokeBedrockJSON<RootChapterGenerationResponse>(
+    const t0Root = Date.now();
+    const rootResponse = await invokeBedrockYAML<RootChapterGenerationResponse>(
       ADULT_STORY_MODEL_ID,
       rootSystemPrompt,
       rootUserContent,
       storyId,
       options.profileId
     );
+    console.log('[StoryEngine] Bedrock root chapter latency (ms)', { storyId, latencyMs: Date.now() - t0Root });
 
     if (!validateRootChapterResponse(rootResponse)) {
       console.error('[StoryEngine] Invalid root chapter response', { storyId });
@@ -834,25 +886,27 @@ export async function generateAdultStoryContent(storyId: string, options: Create
       themeNotes: rootResponse.themeNotes,
     };
 
-    const rootNode = await createStoryNode({
-      storyId,
-      nodeId: rootNodeId,
-      parentNodeId: null,
-      choiceLabelFromParent: null,
-      chapterIndex: 0,
-      depth: 0,
-      text: rootResponse.chapterText,
-      choices,
-      localSummary: rootResponse.localSummary,
-      isEnding: false,
-    });
-
-    const updatedStory = await updateStory(storyId, {
-      status: 'in_progress',
-      activeNodeId: rootNodeId,
-      bible,
-      generationError: null,
-    });
+    // Parallelize root node creation and story update
+    const [rootNode, updatedStory] = await Promise.all([
+      createStoryNode({
+        storyId,
+        nodeId: rootNodeId,
+        parentNodeId: null,
+        choiceLabelFromParent: null,
+        chapterIndex: 0,
+        depth: 0,
+        text: rootResponse.chapterText,
+        choices,
+        localSummary: rootResponse.localSummary,
+        isEnding: false,
+      }),
+      updateStory(storyId, {
+        status: 'in_progress',
+        activeNodeId: rootNodeId,
+        bible,
+        generationError: null,
+      })
+    ]);
 
     console.log('[StoryEngine] Story content generated', { storyId, profileId: options.profileId, genre: config.genre, targetNodeCount });
 
@@ -905,12 +959,19 @@ export async function initContinueStory(options: ContinueAdultStoryOptions): Pro
 }
 
 export async function generateNextChapter(storyId: string, profileId: string, userHint?: string | null): Promise<ContinueStoryResult> {
-  const story = await getStoryById(storyId);
+  // Parallelize initial data fetching
+  const [story, currentNode] = await Promise.all([
+    getStoryById(storyId),
+    (async () => {
+      const s = await getStoryById(storyId);
+      if (!s) return null;
+      return getStoryNode(storyId, s.activeNodeId);
+    })()
+  ]);
+
   if (!story) throw new Error('Story not found');
   if (story.status !== 'generating_chapter') throw new Error('Story is not in generating_chapter state');
   if (!story.pendingChoiceId) throw new Error('No pending choice ID');
-
-  const currentNode = await getStoryNode(storyId, story.activeNodeId);
   if (!currentNode) throw new Error('Current node not found');
 
   const chosenChoice = currentNode.choices.find((c) => c.choiceId === story.pendingChoiceId);
@@ -934,13 +995,15 @@ export async function generateNextChapter(storyId: string, profileId: string, us
     );
     const userContent = buildContinuationUserContent(pathToNode, chosenChoice.label, userHint);
 
-    const aiResponse = await invokeBedrockJSON<ChapterGenerationResponse>(
+    const t0Chapter = Date.now();
+    const aiResponse = await invokeBedrockYAML<ChapterGenerationResponse>(
       ADULT_STORY_MODEL_ID,
       systemPrompt,
       userContent,
       storyId,
       profileId
     );
+    console.log('[StoryEngine] Bedrock chapter latency (ms)', { storyId, latencyMs: Date.now() - t0Chapter });
 
     if (!validateChapterResponse(aiResponse)) {
       console.error('[StoryEngine] Invalid chapter response', { storyId });
@@ -955,19 +1018,7 @@ export async function generateNextChapter(storyId: string, profileId: string, us
     }
 
     const newNodeId = randomUUID();
-    const newNode = await createStoryNode({
-      storyId,
-      nodeId: newNodeId,
-      parentNodeId: currentNode.nodeId,
-      choiceLabelFromParent: chosenChoice.label,
-      chapterIndex: newChapterIndex,
-      depth: newNodeDepth,
-      text: aiResponse.chapterText,
-      choices,
-      localSummary: aiResponse.localSummary,
-      isEnding,
-    });
-
+    
     const updatePayload: Parameters<typeof updateStory>[1] = {
       activeNodeId: newNodeId,
       status: isEnding ? 'completed' : 'in_progress',
@@ -986,7 +1037,23 @@ export async function generateNextChapter(storyId: string, profileId: string, us
       updatePayload.completedAt = new Date().toISOString();
     }
 
-    const updatedStory = await updateStory(storyId, updatePayload);
+    // Parallelize node creation and story update
+    const [newNode, updatedStory] = await Promise.all([
+      createStoryNode({
+        storyId,
+        nodeId: newNodeId,
+        parentNodeId: currentNode.nodeId,
+        choiceLabelFromParent: chosenChoice.label,
+        chapterIndex: newChapterIndex,
+        depth: newNodeDepth,
+        text: aiResponse.chapterText,
+        choices,
+        localSummary: aiResponse.localSummary,
+        isEnding,
+      }),
+      updateStory(storyId, updatePayload)
+    ]);
+
     if (!updatedStory) throw new Error('Failed to update story');
 
     console.log('[StoryEngine] Chapter generated', { 
@@ -997,17 +1064,6 @@ export async function generateNextChapter(storyId: string, profileId: string, us
       stage, 
       isEnding 
     });
-
-    if (isEnding) {
-      try {
-        await archiveCompletedStory(updatedStory);
-      } catch (archiveError) {
-        console.error('[StoryEngine] Failed to archive completed story', {
-          storyId,
-          error: archiveError instanceof Error ? archiveError.message : 'Unknown error',
-        });
-      }
-    }
 
     return { story: updatedStory, newNode };
   } catch (error) {

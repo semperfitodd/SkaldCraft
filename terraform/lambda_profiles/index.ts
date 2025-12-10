@@ -8,44 +8,27 @@ import {
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
+import {
+  ADULT_GENRES,
+  CHILD_GENRES,
+  CHILD_AGE_BANDS,
+  READING_LEVELS_GRL,
+  LANGUAGES,
+  DEFAULT_LANGUAGE,
+  CORS_HEADERS as SHARED_CORS_HEADERS,
+  MAX_CHILD_PROFILES,
+  ADULT_AGE_THRESHOLD,
+} from './constants';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
 const USERS_TABLE = process.env.USERS_TABLE!;
 const CHILD_PROFILES_TABLE = process.env.CHILD_PROFILES_TABLE!;
-
-const MAX_CHILD_PROFILES = 5;
-
-const CORS_HEADERS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-};
-
-const VALID_GENRES = [
-  'fantasy', 'mystery', 'sci-fi', 'romance', 'thriller', 'horror',
-  'historical', 'literary', 'adventure', 'humor', 'drama', 'western',
-  'paranormal', 'dystopian', 'mythology', 'fairy-tale', 'steampunk', 'noir',
-];
-
-const VALID_CHILD_GENRES = [
-  'adventure', 'animals', 'sports', 'school-life', 'history',
-  'science-space', 'funny', 'mystery', 'fairy-tales', 'comic-style',
-];
-
-const VALID_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh'];
-
-const VALID_GRL_VALUES = [
-  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-  'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'Z+',
-];
-
-const VALID_READING_AGE_BANDS = ['prek', 'early-elementary', 'upper-elementary', 'middle-school'] as const;
-
-const DEFAULT_LANGUAGE = 'en';
+const CORS_HEADERS = SHARED_CORS_HEADERS;
 const DEFAULT_GENRES = ['fantasy'];
 
-type ReadingAgeBand = typeof VALID_READING_AGE_BANDS[number];
+type ReadingAgeBand = typeof CHILD_AGE_BANDS[number];
 
 interface APIGatewayEvent {
   requestContext: {
@@ -157,28 +140,28 @@ function isValidDate(str: string): boolean {
 function validateCreateChild(data: CreateChildProfileRequest): string | null {
   if (!data.displayName?.trim()) return 'displayName is required';
   if (!data.birthday || !isValidDate(data.birthday)) return 'birthday must be valid YYYY-MM-DD';
-  if (!VALID_GRL_VALUES.includes(data.readingLevelGRL)) return 'Invalid readingLevelGRL';
+  if (!READING_LEVELS_GRL.includes(data.readingLevelGRL as any)) return 'Invalid readingLevelGRL';
   if (!data.preferredGenres?.length) return 'preferredGenres required';
   for (const g of data.preferredGenres) {
-    if (!VALID_CHILD_GENRES.includes(g)) return `Invalid genre: ${g}`;
+    if (!CHILD_GENRES.includes(g as any)) return `Invalid genre: ${g}`;
   }
-  if (data.readingAgeBand && !VALID_READING_AGE_BANDS.includes(data.readingAgeBand)) return 'Invalid readingAgeBand';
-  if (data.defaultLanguage && !VALID_LANGUAGES.includes(data.defaultLanguage)) return 'Invalid language';
+  if (data.readingAgeBand && !CHILD_AGE_BANDS.includes(data.readingAgeBand)) return 'Invalid readingAgeBand';
+  if (data.defaultLanguage && !LANGUAGES.includes(data.defaultLanguage as any)) return 'Invalid language';
   return null;
 }
 
 function validateUpdateChild(data: UpdateChildProfileRequest): string | null {
   if (data.displayName !== undefined && !data.displayName.trim()) return 'displayName cannot be empty';
   if (data.birthday !== undefined && !isValidDate(data.birthday)) return 'birthday must be valid YYYY-MM-DD';
-  if (data.readingLevelGRL !== undefined && !VALID_GRL_VALUES.includes(data.readingLevelGRL)) return 'Invalid readingLevelGRL';
+  if (data.readingLevelGRL !== undefined && !READING_LEVELS_GRL.includes(data.readingLevelGRL as any)) return 'Invalid readingLevelGRL';
   if (data.preferredGenres !== undefined) {
     if (!data.preferredGenres.length) return 'preferredGenres cannot be empty';
     for (const g of data.preferredGenres) {
-      if (!VALID_CHILD_GENRES.includes(g)) return `Invalid genre: ${g}`;
+      if (!CHILD_GENRES.includes(g as any)) return `Invalid genre: ${g}`;
     }
   }
-  if (data.readingAgeBand !== undefined && !VALID_READING_AGE_BANDS.includes(data.readingAgeBand)) return 'Invalid readingAgeBand';
-  if (data.defaultLanguage !== undefined && !VALID_LANGUAGES.includes(data.defaultLanguage)) return 'Invalid language';
+  if (data.readingAgeBand !== undefined && !CHILD_AGE_BANDS.includes(data.readingAgeBand)) return 'Invalid readingAgeBand';
+  if (data.defaultLanguage !== undefined && !LANGUAGES.includes(data.defaultLanguage as any)) return 'Invalid language';
   return null;
 }
 
@@ -187,10 +170,10 @@ function validateUpdateProfile(data: UpdateProfileRequest): string | null {
   if (data.preferredGenres !== undefined) {
     if (!data.preferredGenres.length) return 'preferredGenres cannot be empty';
     for (const g of data.preferredGenres) {
-      if (!VALID_GENRES.includes(g)) return `Invalid genre: ${g}`;
+      if (!ADULT_GENRES.includes(g as any)) return `Invalid genre: ${g}`;
     }
   }
-  if (data.defaultLanguage !== undefined && !VALID_LANGUAGES.includes(data.defaultLanguage)) return 'Invalid language';
+  if (data.defaultLanguage !== undefined && !LANGUAGES.includes(data.defaultLanguage as any)) return 'Invalid language';
   return null;
 }
 

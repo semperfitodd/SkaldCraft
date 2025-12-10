@@ -1,6 +1,16 @@
 import { randomUUID } from 'crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import {
+  ALL_GENRES,
+  STORY_TONES,
+  STORY_POVS,
+  STORY_LENGTHS,
+  AGE_BANDS,
+  CORS_HEADERS as SHARED_CORS_HEADERS,
+  ADULT_AGE_THRESHOLD,
+} from './constants';
 import type {
   StoryConfig,
   StoryBible,
@@ -31,32 +41,17 @@ import {
   initContinueStory,
   generateNextChapter,
   getArchivedStory,
-  archiveCompletedStory,
   LENGTH_TO_NODE_COUNT,
   type CreateAdultStoryOptions,
 } from './storyEngine';
 
-const CORS_HEADERS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-};
+const lambdaClient = new LambdaClient({});
+const CORS_HEADERS = SHARED_CORS_HEADERS;
 
-const VALID_AGE_BANDS = ['adult', 'teen', 'middle-school', 'upper-elementary', 'early-elementary', 'prek'];
-const VALID_GENRES = [
-  'fantasy', 'mystery', 'sci-fi', 'romance', 'thriller', 'horror',
-  'historical', 'literary', 'adventure', 'humor', 'drama', 'western',
-  'paranormal', 'dystopian', 'mythology', 'fairy-tale', 'steampunk', 'noir',
-  'animals', 'sports', 'school-life', 'science-space', 'funny', 'comic-style',
-];
-const VALID_TONES = ['light', 'serious', 'dark', 'epic', 'humorous'];
-const VALID_POVS = ['first-person', 'third-person-limited', 'third-person-omniscient'];
-const VALID_LENGTHS = ['short', 'medium', 'long'];
 const VALID_STATUSES: StoryStatus[] = ['in_progress', 'completed', 'abandoned'];
-
 const MAX_CUSTOM_PROMPT_LENGTH = 500;
 const MAX_TITLE_LENGTH = 200;
 const MAX_USER_HINT_LENGTH = 200;
-const ADULT_AGE_THRESHOLD = 18;
 
 interface APIGatewayEvent {
   requestContext: {
@@ -128,6 +123,33 @@ function parseJSON<T>(body: string | undefined): T | null {
   }
 }
 
+/**
+ * Invoke this Lambda function asynchronously for background processing
+ */
+async function invokeAsync(payload: { action: string; data: any }): Promise<void> {
+  const functionName = process.env.LAMBDA_FUNCTION_NAME;
+  if (!functionName) {
+    throw new Error('LAMBDA_FUNCTION_NAME environment variable not set');
+  }
+
+  const command = new InvokeCommand({
+    FunctionName: functionName,
+    InvocationType: 'Event', // Async invoke
+    Payload: JSON.stringify(payload),
+  });
+
+  try {
+    await lambdaClient.send(command);
+    console.log('[Lambda] Async invocation triggered', { action: payload.action });
+  } catch (error) {
+    console.error('[Lambda] Failed to trigger async invocation', {
+      action: payload.action,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw error;
+  }
+}
+
 function calculateAge(birthday: string): number {
   const birthDate = new Date(birthday);
   const today = new Date();
@@ -155,11 +177,11 @@ async function getUserProfile(email: string): Promise<UserProfile | null> {
 
 function validateConfig(config: StoryConfig): string | null {
   if (!config) return 'config is required';
-  if (!VALID_AGE_BANDS.includes(config.ageBand)) return 'Invalid ageBand';
-  if (!VALID_GENRES.includes(config.genre)) return 'Invalid genre';
-  if (!VALID_TONES.includes(config.tone)) return 'Invalid tone';
-  if (!VALID_POVS.includes(config.pov)) return 'Invalid pov';
-  if (!VALID_LENGTHS.includes(config.targetLength)) return 'Invalid targetLength';
+  if (!AGE_BANDS.includes(config.ageBand as any)) return 'Invalid ageBand';
+  if (!ALL_GENRES.includes(config.genre as any)) return 'Invalid genre';
+  if (!STORY_TONES.includes(config.tone as any)) return 'Invalid tone';
+  if (!STORY_POVS.includes(config.pov as any)) return 'Invalid pov';
+  if (!STORY_LENGTHS.includes(config.targetLength as any)) return 'Invalid targetLength';
   if (typeof config.explicitContentAllowed !== 'boolean') return 'explicitContentAllowed must be boolean';
   return null;
 }
@@ -185,10 +207,10 @@ function validateCreateNode(data: CreateNodeRequest): string | null {
 
 function validateCreateAdultStory(data: CreateAdultStoryRequest): string | null {
   if (!data.profileId) return 'profileId is required';
-  if (!VALID_LENGTHS.includes(data.targetLength)) return 'Invalid targetLength';
-  if (data.genre != null && !VALID_GENRES.includes(data.genre)) return 'Invalid genre';
-  if (data.tone != null && !VALID_TONES.includes(data.tone)) return 'Invalid tone';
-  if (data.pov != null && !VALID_POVS.includes(data.pov)) return 'Invalid pov';
+  if (!STORY_LENGTHS.includes(data.targetLength as any)) return 'Invalid targetLength';
+  if (data.genre != null && !ALL_GENRES.includes(data.genre as any)) return 'Invalid genre';
+  if (data.tone != null && !STORY_TONES.includes(data.tone as any)) return 'Invalid tone';
+  if (data.pov != null && !STORY_POVS.includes(data.pov as any)) return 'Invalid pov';
   if (data.customPrompt && data.customPrompt.length > MAX_CUSTOM_PROMPT_LENGTH) {
     return `customPrompt must be ${MAX_CUSTOM_PROMPT_LENGTH} characters or less`;
   }
@@ -379,11 +401,10 @@ async function handleCreateAdultStory(email: string, body: string | undefined): 
       status: story.status,
     });
 
-    generateAdultStoryContent(story.storyId, storyOptions).catch((error) => {
-      console.error('[Stories] Background story generation failed', {
-        storyId: story.storyId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+    // Trigger async Lambda invocation for background generation
+    await invokeAsync({
+      action: 'generateAdultStory',
+      data: { storyId: story.storyId, storyOptions },
     });
 
     return response(202, { story, status: 'creating' });
@@ -427,11 +448,10 @@ async function handleContinueStory(email: string, storyId: string, body: string 
       status: story.status,
     });
 
-    generateNextChapter(storyId, email, data.userHint).catch((error) => {
-      console.error('[Stories] Background chapter generation failed', {
-        storyId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+    // Trigger async Lambda invocation for background generation
+    await invokeAsync({
+      action: 'generateNextChapter',
+      data: { storyId, email, userHint: data.userHint },
     });
 
     return response(202, { story, status: 'generating_chapter' });
@@ -494,21 +514,22 @@ async function handleGetStoryArchive(email: string, storyId: string): Promise<AP
     return response(400, { error: 'Story is not completed yet' });
   }
 
+  // Story is completed - archiving should be handled by DynamoDB Stream Lambda
   if (!story.isArchived || !story.contentS3Key) {
-    try {
-      await archiveCompletedStory(story);
-    } catch (archiveError) {
-      console.error('[Stories] Failed to archive story on demand', {
-        storyId,
-        error: archiveError instanceof Error ? archiveError.message : 'Unknown error',
-      });
-      return response(500, { error: 'Failed to archive story' });
-    }
+    console.log('[Stories] Story completed but not yet archived, archiving in progress', { 
+      storyId,
+      status: story.status,
+      isArchived: story.isArchived,
+    });
+    return response(202, { 
+      message: 'Story is being archived. Please try again in a few moments.',
+      status: 'archiving',
+    });
   }
 
   const archivedStory = await getArchivedStory(storyId);
   if (!archivedStory) {
-    return response(404, { error: 'Archived story content not found' });
+    return response(404, { error: 'Archived story content not found in S3' });
   }
 
   return response(200, archivedStory);
@@ -554,7 +575,38 @@ async function handleGetStoryChapter(email: string, storyId: string, chapterInde
   });
 }
 
-export const handler = async (event: APIGatewayEvent): Promise<APIResponse> => {
+export const handler = async (event: APIGatewayEvent | any, context: any): Promise<APIResponse | void> => {
+  // Handle background invocations (async invoke from same Lambda)
+  if (event.action && event.data) {
+    console.log('[Lambda] Background invocation detected', { action: event.action });
+    
+    try {
+      if (event.action === 'generateAdultStory') {
+        const { storyId, storyOptions } = event.data;
+        await generateAdultStoryContent(storyId, storyOptions);
+        console.log('[Lambda] Background story generation complete', { storyId });
+        return;
+      }
+      
+      if (event.action === 'generateNextChapter') {
+        const { storyId, email, userHint } = event.data;
+        await generateNextChapter(storyId, email, userHint);
+        console.log('[Lambda] Background chapter generation complete', { storyId });
+        return;
+      }
+      
+      console.warn('[Lambda] Unknown background action', { action: event.action });
+    } catch (error) {
+      console.error('[Lambda] Background invocation failed', {
+        action: event.action,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
+    return;
+  }
+
+  // Handle HTTP requests
   try {
     const claims = event.requestContext?.authorizer?.jwt?.claims || {};
     const email = claims.email;

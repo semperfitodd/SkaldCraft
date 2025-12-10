@@ -12,8 +12,8 @@ struct ReadingProfile: Codable, Sendable, Equatable {
     
     static let `default` = ReadingProfile(
         birthday: nil,
-        preferredGenres: ["fantasy"],
-        defaultLanguage: "en",
+        preferredGenres: AppConstants.Defaults.defaultGenres,
+        defaultLanguage: AppConstants.Defaults.defaultLanguage,
         explicitContentAllowed: false
     )
 }
@@ -773,7 +773,7 @@ enum APIService {
         }
         
         let (data, response) = try await URLSession.shared.data(for: request)
-        return try handleAcceptedResponse(data, response)
+        return try handleResponse(data, response)
     }
     
     static func continueAdultStory(idToken: String, storyId: String, request continueRequest: ContinueStoryRequest) async throws -> ContinueStoryResponse {
@@ -790,42 +790,11 @@ enum APIService {
             print("[APIService] Continue response: \(responseString)")
         }
         
-        return try handleAcceptedResponse(data, response)
+        return try handleResponse(data, response)
     }
     
-    private static func handleAcceptedResponse<T: Decodable>(_ data: Data, _ response: URLResponse) throws -> T {
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.requestFailed
-        }
-        
-        let isSuccess = (200...299).contains(httpResponse.statusCode)
-        
-        if !isSuccess {
-            print("[APIService] Request failed with status \(httpResponse.statusCode)")
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("[APIService] Error response: \(responseString)")
-            }
-            if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
-               let errorMessage = errorResponse["error"] {
-                throw APIError.serverError(errorMessage)
-            }
-            throw APIError.requestFailed
-        }
-        
-        do {
-            let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            print("[APIService] JSON decode error: \(error)")
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("[APIService] Response body: \(responseString.prefix(500))")
-            }
-            throw APIError.decodingError
-        }
-    }
     
-    static func pollStoryReady(idToken: String, initialStory: Story, maxAttempts: Int = 15, intervalSeconds: Double = 7) async throws -> StoryCurrentResponse {
+    static func pollStoryReady(idToken: String, initialStory: Story, maxAttempts: Int = AppConstants.Polling.maxAttempts, intervalSeconds: Double = AppConstants.Polling.intervalSeconds) async throws -> StoryCurrentResponse {
         print("[APIService] Polling story \(initialStory.storyId) for ready status...")
         
         for attempt in 1...maxAttempts {
@@ -843,7 +812,7 @@ enum APIService {
         throw APIError.serverError("Story generation timed out. Please try again.")
     }
     
-    static func pollChapterReady(idToken: String, updatedStory: Story, expectedChapterIndex: Int, maxAttempts: Int = 15, intervalSeconds: Double = 7) async throws -> StoryCurrentResponse {
+    static func pollChapterReady(idToken: String, updatedStory: Story, expectedChapterIndex: Int, maxAttempts: Int = AppConstants.Polling.maxAttempts, intervalSeconds: Double = AppConstants.Polling.intervalSeconds) async throws -> StoryCurrentResponse {
         print("[APIService] Polling story \(updatedStory.storyId) for chapter \(expectedChapterIndex)...")
         
         for attempt in 1...maxAttempts {
