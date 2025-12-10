@@ -300,9 +300,40 @@ async function handleUpdateStory(storyId: string, body: string | undefined): Pro
 }
 
 async function handleDeleteStory(storyId: string): Promise<APIResponse> {
-  const deleted = await deleteStory(storyId);
-  if (!deleted) return response(404, { error: 'Story not found' });
-  return response(200, { message: 'Story deleted' });
+  try {
+    // Get story first to check if it exists
+    const story = await getStoryById(storyId);
+    if (!story) return response(404, { error: 'Story not found' });
+
+    // Delete from DynamoDB (this also deletes all nodes)
+    const deleted = await deleteStory(storyId);
+    if (!deleted) return response(404, { error: 'Story not found' });
+
+    // Delete from S3 if archived
+    if (story.status === 'completed') {
+      try {
+        const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+        const s3Client = new S3Client({});
+        const STORY_ARCHIVE_BUCKET = process.env.STORY_ARCHIVE_BUCKET!;
+        const STORY_ARCHIVE_PREFIX = process.env.STORY_ARCHIVE_PREFIX || 'stories/';
+        
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: STORY_ARCHIVE_BUCKET,
+          Key: `${STORY_ARCHIVE_PREFIX}${storyId}.json`,
+        }));
+        
+        console.log(`[DeleteStory] Deleted archived story from S3: ${storyId}`);
+      } catch (s3Error) {
+        console.error('[DeleteStory] Failed to delete from S3:', s3Error);
+        // Continue anyway - DynamoDB deletion succeeded
+      }
+    }
+
+    return response(200, { message: 'Story deleted successfully' });
+  } catch (error) {
+    console.error('[DeleteStory] Error:', error);
+    return response(500, { error: 'Failed to delete story' });
+  }
 }
 
 async function handleListNodes(storyId: string, query?: Record<string, string>): Promise<APIResponse> {

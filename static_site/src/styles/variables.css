@@ -70,12 +70,18 @@
   --max-width-xl: 1024px;
 }
 
+@media (max-width: 768px) {
+  :root {
+    --header-height: 56px;
+  }
+}
+
 @media (max-width: 480px) {
   :root {
     --text-5xl: 2.25rem;
     --text-4xl: 2rem;
     --text-3xl: 1.75rem;
     --space-8: 1.5rem;
-    --header-height: 56px;
+    --header-height: 52px;
   }
 }

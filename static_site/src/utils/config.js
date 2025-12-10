@@ -7,7 +7,7 @@ const REQUIRED_ENV_VARS = [
 
 const missingVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 if (missingVars.length > 0 && process.env.NODE_ENV === 'production') {
-  console.error(`Missing environment variables: ${missingVars.join(', ')}`);
+  throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
 }
 
 const config = {

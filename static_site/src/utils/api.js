@@ -129,24 +129,18 @@ export async function updateStoryNode(storyId, nodeId, updates) {
 }
 
 export async function createAdultStory(payload) {
-  console.log('[API] Creating adult story:', payload);
   const data = await apiRequest('/stories/adult', { 
     method: 'POST', 
     body: JSON.stringify(payload) 
   });
-  console.log('[API] Adult story initialized:', data.story?.storyId, 'status:', data.status);
   return data;
 }
 
 export async function pollStoryReady(storyId, maxAttempts = POLLING_CONFIG.maxAttempts, intervalMs = POLLING_CONFIG.intervalMs) {
-  console.log('[API] Polling for story ready:', storyId);
-  
-  // Wait initial delay before first poll
   await new Promise(resolve => setTimeout(resolve, POLLING_CONFIG.initialDelayMs));
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const story = await fetchStory(storyId);
-    console.log('[API] Poll attempt', attempt + 1, 'status:', story.status);
     
     if (story.status === 'in_progress') {
       const currentNode = await fetchStoryNode(storyId, story.activeNodeId);
@@ -161,9 +155,8 @@ export async function pollStoryReady(storyId, maxAttempts = POLLING_CONFIG.maxAt
       throw new Error(`Unexpected story status: ${story.status}`);
     }
     
-    // Wait between polls (but not after the last attempt)
     if (attempt < maxAttempts - 1) {
-    await new Promise(resolve => setTimeout(resolve, intervalMs));
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
   }
   
@@ -171,14 +164,10 @@ export async function pollStoryReady(storyId, maxAttempts = POLLING_CONFIG.maxAt
 }
 
 export async function pollChapterReady(storyId, expectedChapterIndex, maxAttempts = POLLING_CONFIG.maxAttempts, intervalMs = POLLING_CONFIG.intervalMs) {
-  console.log('[API] Polling for chapter ready:', storyId, 'chapter:', expectedChapterIndex);
-  
-  // Wait initial delay before first poll
   await new Promise(resolve => setTimeout(resolve, POLLING_CONFIG.initialDelayMs));
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const story = await fetchStory(storyId);
-    console.log('[API] Poll attempt', attempt + 1, 'status:', story.status);
     
     if (story.status === 'in_progress' || story.status === 'completed') {
       const currentNode = await fetchStoryNode(storyId, story.activeNodeId);
@@ -195,9 +184,8 @@ export async function pollChapterReady(storyId, expectedChapterIndex, maxAttempt
       throw new Error(`Unexpected story status: ${story.status}`);
     }
     
-    // Wait between polls (but not after the last attempt)
     if (attempt < maxAttempts - 1) {
-    await new Promise(resolve => setTimeout(resolve, intervalMs));
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
   }
   
@@ -205,26 +193,21 @@ export async function pollChapterReady(storyId, expectedChapterIndex, maxAttempt
 }
 
 export async function continueAdultStory(storyId, payload) {
-  console.log('[API] Continuing story:', storyId, payload);
   const data = await apiRequest(`/stories/${storyId}/continue`, { 
     method: 'POST', 
     body: JSON.stringify(payload) 
   });
-  console.log('[API] Continue story initiated, status:', data.status);
   return data;
 }
 
 export async function fetchStoryCurrent(storyId) {
-  console.log('[API] Fetching current story state:', storyId);
   return apiRequest(`/stories/${storyId}/current`);
 }
 
 export async function fetchStoryArchive(storyId) {
-  console.log('[API] Fetching archived story:', storyId);
   return apiRequest(`/stories/${storyId}/archive`);
 }
 
 export async function fetchStoryChapter(storyId, chapterIndex) {
-  console.log('[API] Fetching chapter:', storyId, chapterIndex);
   return apiRequest(`/stories/${storyId}/chapters/${chapterIndex}`);
 }

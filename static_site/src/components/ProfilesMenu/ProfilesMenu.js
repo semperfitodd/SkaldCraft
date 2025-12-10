@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import './ProfilesMenu.css';
 
 function ProfilesMenu({ 
@@ -6,9 +6,47 @@ function ProfilesMenu({
   activeProfile, 
   onSelectProfile, 
   onAddProfile, 
-  onEditProfile 
+  onEditProfile,
+  onNavigateToHome,
+  onNavigateToStories,
+  onNavigateToSettings,
+  onSignOut
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+
+  // Prevent body scroll when menu is open on mobile
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    };
+  }, [isOpen]);
 
   const getActiveDisplayName = () => {
     if (!activeProfile) return 'Select Profile';
@@ -24,8 +62,15 @@ function ProfilesMenu({
     setIsOpen(false);
   };
 
+  const handleNavigate = (callback) => {
+    if (callback) {
+      callback();
+    }
+    setIsOpen(false);
+  };
+
   return (
-    <div className="profiles-menu">
+    <div className="profiles-menu" ref={menuRef}>
       <button 
         className="profiles-menu__trigger"
         onClick={() => setIsOpen(!isOpen)}
@@ -38,9 +83,45 @@ function ProfilesMenu({
       </button>
 
       {isOpen && (
-        <div className="profiles-menu__dropdown">
+        <>
+          <div className="profiles-menu__dropdown">
+          {/* Navigation Section */}
+          {(onNavigateToHome || onNavigateToStories || onNavigateToSettings) && (
+            <div className="profiles-menu__section">
+              <div className="profiles-menu__section-title">Navigation</div>
+              {onNavigateToHome && (
+                <button
+                  className="profiles-menu__nav-item"
+                  onClick={() => handleNavigate(onNavigateToHome)}
+                >
+                  <span className="profiles-menu__nav-icon">🏠</span>
+                  <span className="profiles-menu__nav-text">Home</span>
+                </button>
+              )}
+              {onNavigateToStories && (
+                <button
+                  className="profiles-menu__nav-item"
+                  onClick={() => handleNavigate(onNavigateToStories)}
+                >
+                  <span className="profiles-menu__nav-icon">📚</span>
+                  <span className="profiles-menu__nav-text">Stories</span>
+                </button>
+              )}
+              {onNavigateToSettings && (
+                <button
+                  className="profiles-menu__nav-item"
+                  onClick={() => handleNavigate(onNavigateToSettings)}
+                >
+                  <span className="profiles-menu__nav-icon">⚙️</span>
+                  <span className="profiles-menu__nav-text">Settings</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Profiles Section */}
           <div className="profiles-menu__section">
-            <div className="profiles-menu__section-title">Parent</div>
+            <div className="profiles-menu__section-title">Profiles</div>
             <button
               className={`profiles-menu__item ${activeProfile?.type === 'adult' ? 'profiles-menu__item--active' : ''}`}
               onClick={() => handleSelectProfile('adult')}
@@ -97,12 +178,24 @@ function ProfilesMenu({
               </button>
             </div>
           )}
+
+          {/* Sign Out Section */}
+          {onSignOut && (
+            <div className="profiles-menu__section">
+              <button
+                className="profiles-menu__signout-btn"
+                onClick={() => handleNavigate(onSignOut)}
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
         </div>
+        <div className="profiles-menu__backdrop" onClick={() => setIsOpen(false)} />
+        </>
       )}
     </div>
   );
 }
 
 export default ProfilesMenu;
-
-

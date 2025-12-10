@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handler = void 0;
 const crypto_1 = require("crypto");
@@ -211,10 +244,39 @@ async function handleUpdateStory(storyId, body) {
     return response(200, { story });
 }
 async function handleDeleteStory(storyId) {
-    const deleted = await (0, repository_1.deleteStory)(storyId);
-    if (!deleted)
-        return response(404, { error: 'Story not found' });
-    return response(200, { message: 'Story deleted' });
+    try {
+        // Get story first to check if it exists
+        const story = await (0, repository_1.getStoryById)(storyId);
+        if (!story)
+            return response(404, { error: 'Story not found' });
+        // Delete from DynamoDB (this also deletes all nodes)
+        const deleted = await (0, repository_1.deleteStory)(storyId);
+        if (!deleted)
+            return response(404, { error: 'Story not found' });
+        // Delete from S3 if archived
+        if (story.status === 'completed') {
+            try {
+                const { S3Client, DeleteObjectCommand } = await Promise.resolve().then(() => __importStar(require('@aws-sdk/client-s3')));
+                const s3Client = new S3Client({});
+                const STORY_ARCHIVE_BUCKET = process.env.STORY_ARCHIVE_BUCKET;
+                const STORY_ARCHIVE_PREFIX = process.env.STORY_ARCHIVE_PREFIX || 'stories/';
+                await s3Client.send(new DeleteObjectCommand({
+                    Bucket: STORY_ARCHIVE_BUCKET,
+                    Key: `${STORY_ARCHIVE_PREFIX}${storyId}.json`,
+                }));
+                console.log(`[DeleteStory] Deleted archived story from S3: ${storyId}`);
+            }
+            catch (s3Error) {
+                console.error('[DeleteStory] Failed to delete from S3:', s3Error);
+                // Continue anyway - DynamoDB deletion succeeded
+            }
+        }
+        return response(200, { message: 'Story deleted successfully' });
+    }
+    catch (error) {
+        console.error('[DeleteStory] Error:', error);
+        return response(500, { error: 'Failed to delete story' });
+    }
 }
 async function handleListNodes(storyId, query) {
     const story = await (0, repository_1.getStoryById)(storyId);
