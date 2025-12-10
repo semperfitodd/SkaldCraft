@@ -39,8 +39,8 @@ const STORY_ARCHIVE_PREFIX = process.env.STORY_ARCHIVE_PREFIX || 'stories/';
 
 export const LENGTH_TO_NODE_COUNT: Record<StoryLength, number> = {
   short: 5,
-  medium: 10,
-  long: 20,
+  medium: 25,
+  long: 50,
 };
 
 export type StoryStage = 'setup' | 'rising_action' | 'complication' | 'climax' | 'resolution';
@@ -48,17 +48,22 @@ export type StoryStage = 'setup' | 'rising_action' | 'complication' | 'climax' |
 const BEAT_MAPS: Record<StoryLength, StoryStage[]> = {
   short: ['setup', 'rising_action', 'complication', 'climax', 'resolution'],
   medium: [
-    'setup', 'setup',
+    'setup', 'setup', 'setup', 'setup', 'setup',
+    'rising_action', 'rising_action', 'rising_action', 'rising_action', 'rising_action',
     'rising_action', 'rising_action', 'rising_action',
-    'complication', 'complication',
-    'climax', 'climax',
-    'resolution',
+    'complication', 'complication', 'complication', 'complication', 'complication',
+    'climax', 'climax', 'climax', 'climax',
+    'resolution', 'resolution', 'resolution',
   ],
   long: [
-    'setup', 'setup', 'setup',
-    'rising_action', 'rising_action', 'rising_action', 'rising_action',
-    'complication', 'complication', 'complication', 'complication',
-    'climax', 'climax', 'climax', 'climax',
+    'setup', 'setup', 'setup', 'setup', 'setup', 'setup', 'setup', 'setup', 'setup', 'setup',
+    'rising_action', 'rising_action', 'rising_action', 'rising_action', 'rising_action',
+    'rising_action', 'rising_action', 'rising_action', 'rising_action', 'rising_action',
+    'rising_action', 'rising_action', 'rising_action', 'rising_action', 'rising_action',
+    'complication', 'complication', 'complication', 'complication', 'complication',
+    'complication', 'complication', 'complication', 'complication', 'complication',
+    'climax', 'climax', 'climax', 'climax', 'climax',
+    'climax', 'climax', 'climax', 'climax', 'climax',
     'resolution', 'resolution', 'resolution', 'resolution', 'resolution',
   ],
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Layout, Logo, Button } from '../../components';
+import { Layout, Logo, Button, ProfilesMenu } from '../../components';
 import { buildLogoutUrl } from '../../utils/auth';
 import { 
   fetchStory, 
@@ -11,10 +11,19 @@ import {
 } from '../../utils/api';
 import './StoryReaderPage.css';
 
+const DESKTOP_BREAKPOINT = 1024;
+
 function StoryReaderPage({
+  profile,
+  profiles,
+  activeProfile,
+  onSelectProfile,
+  onProfilesChange,
   storyId,
   initialStory,
   initialNode,
+  onNavigateToHome,
+  onNavigateToProfile,
   onNavigateToStories,
   onStartNewStory,
 }) {
@@ -27,7 +36,7 @@ function StoryReaderPage({
   const [isLoadingChapter, setIsLoadingChapter] = useState(false);
   const [isContinuing, setIsContinuing] = useState(false);
   const [error, setError] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > DESKTOP_BREAKPOINT);
   const contentRef = useRef(null);
 
   const isCompleted = story?.status === 'completed';
@@ -121,7 +130,6 @@ function StoryReaderPage({
       const result = await fetchStoryChapter(storyId, chapterIndex);
       setViewingNode(result.node);
     } catch (err) {
-      console.error('[StoryReader] Failed to load chapter:', err);
       setError('Failed to load chapter');
     } finally {
       setIsLoadingChapter(false);
@@ -171,12 +179,17 @@ function StoryReaderPage({
     <>
       <Logo size="sm" />
       <div className="home-page__header-actions">
-        <button className="home-page__profile-btn" onClick={onNavigateToStories}>
-          Stories
-        </button>
-        <Button as="a" href={buildLogoutUrl()} variant="ghost" size="sm">
-          Sign Out
-        </Button>
+        <ProfilesMenu
+          profiles={profiles}
+          activeProfile={activeProfile}
+          onSelectProfile={onSelectProfile}
+          onAddProfile={() => {}}
+          onEditProfile={() => {}}
+          onNavigateToHome={onNavigateToHome}
+          onNavigateToStories={onNavigateToStories}
+          onNavigateToSettings={onNavigateToProfile}
+          onSignOut={() => window.location.href = buildLogoutUrl()}
+        />
       </div>
     </>
   );
@@ -255,7 +268,8 @@ function StoryReaderPage({
         </aside>
 
         <main className="story-reader__main" ref={contentRef}>
-          <div className="story-reader__header">
+          <div className="story-reader__main-inner">
+            <div className="story-reader__header">
             <div className="story-reader__title-section">
               <h1 className="story-reader__title">{story.title}</h1>
               <div className="story-reader__meta">
@@ -361,6 +375,7 @@ function StoryReaderPage({
                 </span>
               </div>
             )}
+          </div>
           </div>
         </main>
       </div>

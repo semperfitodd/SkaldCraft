@@ -17,6 +17,8 @@ struct StoryReaderView: View {
     @State private var isLoadingArchive = false
     @State private var viewingNode: StoryNode?
     @State private var isFetchingChapter = false
+    @State private var contentOpacity: Double = 0
+    @State private var contentOffset: CGFloat = 20
     
     private var isCompleted: Bool {
         story?.status == .completed
@@ -125,13 +127,27 @@ struct StoryReaderView: View {
                 selectedChapterIndex = node.chapterIndex
                 viewingNode = node
             }
-            // Load archived story if completed and archived
             if story?.status == .completed && story?.isArchived == true && archivedStory == nil {
                 await loadArchivedStory()
+            }
+            
+            withAnimation(.easeOut(duration: 0.6)) {
+                contentOpacity = 1
+                contentOffset = 0
             }
         }
         .onChange(of: currentNode?.nodeId) { _, _ in
             viewingNode = currentNode
+            withAnimation(.easeOut(duration: 0.4)) {
+                contentOpacity = 0
+                contentOffset = 20
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.easeOut(duration: 0.6)) {
+                    contentOpacity = 1
+                    contentOffset = 0
+                }
+            }
         }
     }
     
@@ -268,26 +284,25 @@ struct StoryReaderView: View {
                 Task { await selectChapter(chapter.chapterIndex) }
             }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Text("\(chapter.chapterIndex + 1)")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .frame(width: 26, height: 26)
+                    .font(.system(size: 13, weight: .bold))
+                    .frame(width: 30, height: 30)
                     .background(isCurrent ? Color.orange : Color.white.opacity(0.15))
                     .foregroundStyle(isCurrent ? .white : .white.opacity(0.7))
                     .clipShape(Circle())
+                    .shadow(color: isCurrent ? Color.orange.opacity(0.3) : Color.clear, radius: 4, x: 0, y: 2)
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(chapter.title.replacingOccurrences(of: "Chapter \\d+:\\s*", with: "", options: .regularExpression))
-                        .font(.subheadline)
-                        .fontWeight(isActive ? .semibold : .regular)
+                        .font(.system(size: 15, weight: isActive ? .semibold : .regular))
                         .foregroundStyle(isAvailable ? .white : .white.opacity(0.4))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
                     if isActive && !isArchived {
                         Text("Current")
-                            .font(.caption2)
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.orange)
                     }
                 }
@@ -296,24 +311,27 @@ struct StoryReaderView: View {
                 
                 if !isAvailable {
                     Image(systemName: "lock.fill")
-                        .font(.caption)
+                        .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.3))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(isCurrent ? Color.orange.opacity(0.25) : Color.white.opacity(0.05))
+                    .shadow(color: Color.black.opacity(0.1), radius: isCurrent ? 6 : 2, x: 0, y: isCurrent ? 3 : 1)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isCurrent ? Color.orange.opacity(0.5) : Color.clear, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isCurrent ? Color.orange.opacity(0.6) : Color.white.opacity(0.1), lineWidth: isCurrent ? 2 : 1)
             )
         }
         .buttonStyle(.plain)
         .disabled(!isAvailable)
         .opacity(isAvailable ? 1 : 0.5)
+        .scaleEffect(isCurrent ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isCurrent)
     }
     
     private func isChapterAvailable(chapter: OutlineChapter) -> Bool {
@@ -420,18 +438,23 @@ struct StoryReaderView: View {
                     .frame(maxWidth: .infinity, minHeight: 200)
             } else {
                 Text(currentChapterText)
-                    .font(.body)
-                    .lineSpacing(8)
+                    .font(.system(size: 18, weight: .regular, design: .serif))
+                    .lineSpacing(12)
                     .foregroundStyle(.white)
+                    .opacity(contentOpacity)
+                    .offset(y: contentOffset)
             }
         }
-        .padding(20)
+        .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.08))
+                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
         )
     }
     
@@ -479,26 +502,30 @@ struct StoryReaderView: View {
     }
     
     private var endingSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Image(systemName: "book.closed.fill")
-                .font(.system(size: 48))
+                .font(.system(size: 56))
                 .foregroundStyle(.orange)
+                .shadow(color: Color.orange.opacity(0.4), radius: 12, x: 0, y: 6)
             
             Text("The End")
-                .font(.title)
-                .fontWeight(.bold)
+                .font(.system(size: 32, weight: .bold, design: .serif))
                 .foregroundStyle(.white)
             
             Text("Your story has reached its conclusion.")
-                .font(.body)
+                .font(.system(size: 17, weight: .medium, design: .serif))
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
             
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Button {
                     onBack()
                 } label: {
                     Text("Back to Stories")
-                        .font(.headline)
+                        .font(.system(size: 16, weight: .semibold))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
                 }
                 .buttonStyle(.bordered)
                 .tint(.white)
@@ -507,26 +534,32 @@ struct StoryReaderView: View {
                     onStartNewStory()
                 } label: {
                     Text("New Story")
-                        .font(.headline)
+                        .font(.system(size: 16, weight: .semibold))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.orange)
+                .shadow(color: Color.orange.opacity(0.4), radius: 8, x: 0, y: 4)
             }
-            .padding(.top, 8)
+            .padding(.top, 12)
         }
         .frame(maxWidth: .infinity)
-        .padding(24)
+        .padding(28)
         .background(
-            LinearGradient(
-                colors: [Color.orange.opacity(0.15), Color.clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            RoundedRectangle(cornerRadius: 18)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.orange.opacity(0.2), Color.orange.opacity(0.05)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .shadow(color: Color.orange.opacity(0.2), radius: 16, x: 0, y: 8)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.orange.opacity(0.4), lineWidth: 2)
         )
     }
     
@@ -639,7 +672,6 @@ struct StoryReaderView: View {
         do {
             let request = ContinueStoryRequest(choiceId: choiceId)
             let initialResponse = try await APIService.continueAdultStory(idToken: idToken, storyId: storyId, request: request)
-            print("[StoryReaderView] Continue initiated: status = \(initialResponse.status)")
             
             isPolling = true
             let expectedChapter = currentChapterIndex + 1
@@ -703,7 +735,7 @@ private struct ChoiceButton: View {
         Button(action: action) {
             HStack {
                 Text(label)
-                    .font(.body)
+                    .font(.system(size: 17, weight: .medium, design: .serif))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
                 
@@ -711,18 +743,30 @@ private struct ChoiceButton: View {
                 
                 Image(systemName: "arrow.right")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.orange.opacity(0.8))
             }
-            .padding(16)
-            .background(Color.white.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(0.1))
+                    .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 4)
+            )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 14)
                     .stroke(Color.white.opacity(0.2), lineWidth: 1)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ChoiceButtonStyle())
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.6 : 1)
+    }
+    
+    struct ChoiceButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+                .opacity(configuration.isPressed ? 0.9 : 1.0)
+                .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+        }
     }
 }

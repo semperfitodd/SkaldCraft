@@ -2,24 +2,40 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: var(--space-6);
+  padding: var(--space-8);
   max-width: var(--max-width-xl);
   margin: 0 auto;
   width: 100%;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .stories-page__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+  border-bottom: 2px solid var(--color-border);
 }
 
 .stories-page__title {
-  font-size: var(--text-3xl);
+  font-size: var(--text-4xl);
   font-weight: 700;
   color: var(--color-text);
   margin: 0;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .stories-page__restricted {
@@ -51,54 +67,69 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: var(--space-8);
+  padding: var(--space-12);
 }
 
 .stories-page__empty-icon {
-  font-size: 4rem;
-  margin-bottom: var(--space-4);
-  opacity: 0.3;
+  font-size: 5rem;
+  margin-bottom: var(--space-6);
+  opacity: 0.4;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
 }
 
 .stories-page__empty-text {
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   color: var(--color-text-muted);
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-8);
+  font-family: var(--font-serif);
+  line-height: 1.6;
 }
 
 .stories-page__list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .stories-page__item {
   display: flex;
   align-items: center;
-  padding: var(--space-4);
+  padding: var(--space-5);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition-fast);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .stories-page__item:hover {
   background: var(--color-surface-hover);
   border-color: var(--color-primary);
-  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .stories-page__item-content {
   flex: 1;
   min-width: 0;
+  cursor: pointer;
+}
+
+.stories-page__item-content:hover ~ .stories-page__item-actions .stories-page__item-arrow {
+  color: var(--color-primary);
+  transform: translateX(6px);
+}
+
+.stories-page__item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .stories-page__item-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--color-text);
-  margin: 0 0 var(--space-1) 0;
+  margin: 0 0 var(--space-2) 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -109,6 +140,7 @@
   gap: var(--space-4);
   font-size: var(--text-sm);
   color: var(--color-text-muted);
+  font-weight: 500;
 }
 
 .stories-page__item-status {
@@ -129,14 +161,42 @@
   color: var(--color-text-muted);
 }
 
-.stories-page__item-arrow {
-  font-size: var(--text-xl);
+.stories-page__delete-btn {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
   color: var(--color-text-muted);
-  transition: transform var(--transition-fast);
+  cursor: pointer;
+  font-size: var(--text-xl);
+  padding: var(--space-2);
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.stories-page__item:hover .stories-page__item-arrow {
-  transform: translateX(4px);
+.stories-page__delete-btn:hover:not(:disabled) {
+  background: var(--color-error-bg);
+  border-color: var(--color-error);
+  color: var(--color-error);
+  transform: scale(1.1);
+}
+
+.stories-page__delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.stories-page__item-arrow {
+  font-size: var(--text-2xl);
+  color: var(--color-text-muted);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  padding: var(--space-2);
+}
+
+.stories-page__item-arrow:hover {
+  transform: translateX(6px);
   color: var(--color-primary);
 }
 

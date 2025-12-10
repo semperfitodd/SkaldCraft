@@ -69,7 +69,7 @@ function App() {
       const profilesData = await fetchProfiles();
       setProfiles(profilesData);
     } catch (err) {
-      console.error('Failed to load profiles:', err);
+      setProfileError(err.message);
     }
   }, []);
 
@@ -193,7 +193,16 @@ function App() {
     return (
       <ProfilePage
         profile={profile}
+        profiles={profiles}
+        activeProfile={activeProfile}
+        onSelectProfile={handleSelectProfile}
+        onProfilesChange={handleProfilesChange}
         onProfileUpdate={handleProfileUpdate}
+        onNavigateToHome={() => {
+          setCurrentView(VIEW.HOME);
+          updateHash(VIEW.HOME);
+        }}
+        onNavigateToStories={handleNavigateToStories}
         onBack={() => {
           setCurrentView(VIEW.HOME);
           updateHash(VIEW.HOME);
@@ -207,8 +216,18 @@ function App() {
       <>
         <StoriesPage
           profile={profile}
+          profiles={profiles}
           activeProfile={activeProfile}
-          onNavigateToHome={() => setCurrentView(VIEW.HOME)}
+          onSelectProfile={handleSelectProfile}
+          onProfilesChange={handleProfilesChange}
+          onNavigateToHome={() => {
+            setCurrentView(VIEW.HOME);
+            updateHash(VIEW.HOME);
+          }}
+          onNavigateToProfile={() => {
+            setCurrentView(VIEW.PROFILE);
+            updateHash(VIEW.PROFILE);
+          }}
           onNavigateToStory={handleNavigateToStory}
           onStartNewStory={handleStartNewStory}
         />
@@ -228,9 +247,22 @@ function App() {
     return (
       <>
         <StoryReaderPage
+          profile={profile}
+          profiles={profiles}
+          activeProfile={activeProfile}
+          onSelectProfile={handleSelectProfile}
+          onProfilesChange={handleProfilesChange}
           storyId={currentStoryId}
           initialStory={currentStory}
           initialNode={currentNode}
+          onNavigateToHome={() => {
+            setCurrentView(VIEW.HOME);
+            updateHash(VIEW.HOME);
+          }}
+          onNavigateToProfile={() => {
+            setCurrentView(VIEW.PROFILE);
+            updateHash(VIEW.PROFILE);
+          }}
           onNavigateToStories={handleNavigateToStories}
           onStartNewStory={handleStartNewStory}
         />

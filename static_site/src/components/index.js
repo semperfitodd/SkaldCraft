@@ -6,4 +6,5 @@ export { default as ProfileForm } from './ProfileForm';
 export { default as ProfilesMenu } from './ProfilesMenu';
 export { default as ChildProfileForm } from './ChildProfileForm';
 export { default as NewStoryModal } from './NewStoryModal';
+export { VikingIntro } from './VikingIntro';
 export { AppleIcon, GoogleIcon } from './icons';

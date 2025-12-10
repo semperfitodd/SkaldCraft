@@ -1,19 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Layout, Logo, Button, Loading } from '../../components';
+import { Layout, Logo, Button, Loading, ProfilesMenu } from '../../components';
 import { buildLogoutUrl } from '../../utils/auth';
-import { fetchStories, calculateAge } from '../../utils/api';
+import { fetchStories, deleteStory, calculateAge } from '../../utils/api';
 import './StoriesPage.css';
 
 function StoriesPage({
   profile,
+  profiles,
   activeProfile,
+  onSelectProfile,
+  onProfilesChange,
   onNavigateToHome,
+  onNavigateToProfile,
   onNavigateToStory,
   onStartNewStory,
 }) {
   const [stories, setStories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deletingStoryId, setDeletingStoryId] = useState(null);
 
   const isAdultProfile = activeProfile?.type === 'adult' && 
     profile?.profile?.birthday && 
@@ -60,16 +65,42 @@ function StoriesPage({
     }
   };
 
+  const handleDeleteStory = async (storyId, storyTitle, event) => {
+    event.stopPropagation(); // Prevent navigating to story
+    
+    if (!window.confirm(`Are you sure you want to delete "${storyTitle}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingStoryId(storyId);
+    setError(null);
+
+    try {
+      await deleteStory(storyId);
+      // Remove from local state
+      setStories(stories.filter(s => s.storyId !== storyId));
+    } catch (err) {
+      setError(`Failed to delete story: ${err.message}`);
+    } finally {
+      setDeletingStoryId(null);
+    }
+  };
+
   const header = (
     <>
       <Logo size="sm" />
       <div className="home-page__header-actions">
-        <button className="home-page__profile-btn" onClick={onNavigateToHome}>
-          Home
-        </button>
-        <Button as="a" href={buildLogoutUrl()} variant="ghost" size="sm">
-          Sign Out
-        </Button>
+        <ProfilesMenu
+          profiles={profiles}
+          activeProfile={activeProfile}
+          onSelectProfile={onSelectProfile}
+          onAddProfile={() => {}}
+          onEditProfile={() => {}}
+          onNavigateToHome={onNavigateToHome}
+          onNavigateToStories={null}
+          onNavigateToSettings={onNavigateToProfile}
+          onSignOut={() => window.location.href = buildLogoutUrl()}
+        />
       </div>
     </>
   );
@@ -136,9 +167,11 @@ function StoriesPage({
               <div
                 key={story.storyId}
                 className="stories-page__item"
-                onClick={() => onNavigateToStory(story.storyId)}
               >
-                <div className="stories-page__item-content">
+                <div 
+                  className="stories-page__item-content"
+                  onClick={() => onNavigateToStory(story.storyId)}
+                >
                   <h3 className="stories-page__item-title">{story.title}</h3>
                   <div className="stories-page__item-meta">
                     <span className={`stories-page__item-status stories-page__item-status--${story.status}`}>
@@ -148,7 +181,22 @@ function StoriesPage({
                     <span>Updated {formatDate(story.updatedAt)}</span>
                   </div>
                 </div>
-                <span className="stories-page__item-arrow">→</span>
+                <div className="stories-page__item-actions">
+                  <button
+                    className="stories-page__delete-btn"
+                    onClick={(e) => handleDeleteStory(story.storyId, story.title, e)}
+                    disabled={deletingStoryId === story.storyId}
+                    title="Delete story"
+                  >
+                    {deletingStoryId === story.storyId ? '⏳' : '🗑️'}
+                  </button>
+                  <span 
+                    className="stories-page__item-arrow"
+                    onClick={() => onNavigateToStory(story.storyId)}
+                  >
+                    →
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -159,5 +207,3 @@ function StoriesPage({
 }
 
 export default StoriesPage;
-
-

@@ -2,19 +2,31 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  transition: transform var(--transition-base);
+}
+
+.logo:hover {
+  transform: scale(1.02);
 }
 
 .logo__image {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-glow);
+  transition: box-shadow var(--transition-base);
+}
+
+.logo:hover .logo__image {
+  box-shadow: 0 8px 32px rgba(245, 166, 35, 0.5);
 }
 
 .logo__text {
   font-family: var(--font-serif);
+  font-weight: 700;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  letter-spacing: -0.02em;
 }
 
 /* Sizes */
@@ -52,7 +64,27 @@
   text-align: center;
 }
 
+@media (max-width: 768px) {
+  .logo--sm .logo__image {
+    width: 28px;
+    height: 28px;
+  }
+
+  .logo--sm .logo__text {
+    font-size: var(--text-lg);
+  }
+}
+
 @media (max-width: 480px) {
+  .logo--sm .logo__image {
+    width: 24px;
+    height: 24px;
+  }
+
+  .logo--sm .logo__text {
+    font-size: var(--text-base);
+  }
+
   .logo--lg .logo__image {
     width: 100px;
     height: 100px;

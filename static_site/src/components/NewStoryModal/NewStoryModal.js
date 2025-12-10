@@ -3,6 +3,8 @@ import { Button } from '../../components';
 import { createAdultStory, pollStoryReady, STORY_OPTIONS, PROFILE_OPTIONS } from '../../utils/api';
 import './NewStoryModal.css';
 
+const MAX_CUSTOM_PROMPT_LENGTH = 500;
+
 const GENRE_DESCRIPTIONS = {
   'fantasy': 'Magic, dragons, and adventure',
   'mystery': 'Puzzles and intrigue',
@@ -32,10 +34,16 @@ const DEFAULT_PRESETS = [
   { id: 'thriller', name: 'Thriller', genre: 'thriller', desc: 'Suspense and tension' },
 ];
 
+const LENGTH_DESCRIPTIONS = {
+  short: '5 chapters',
+  medium: '25 chapters',
+  long: '50 chapters',
+};
+
 const LENGTH_OPTIONS = [
-  { value: 'short', name: 'Short', desc: '~5 sections' },
-  { value: 'medium', name: 'Medium', desc: '~10 sections' },
-  { value: 'long', name: 'Long', desc: '~20 sections' },
+  { value: 'short', name: 'Short', desc: LENGTH_DESCRIPTIONS.short },
+  { value: 'medium', name: 'Medium', desc: LENGTH_DESCRIPTIONS.medium },
+  { value: 'long', name: 'Long', desc: LENGTH_DESCRIPTIONS.long },
 ];
 
 function NewStoryModal({ profileId, preferredGenres = [], onClose, onStoryCreated }) {
@@ -97,10 +105,8 @@ function NewStoryModal({ profileId, preferredGenres = [], onClose, onStoryCreate
       setStatusMessage('Generating outline and first chapter...');
       const result = await pollStoryReady(initResult.story.storyId);
       
-      console.log('[NewStoryModal] Story ready, calling onStoryCreated:', result);
       onStoryCreated({ story: result.story, rootNode: result.currentNode });
     } catch (err) {
-      console.error('[NewStoryModal] Error creating story:', err);
       setError(err.message || 'Failed to create story');
       setStatusMessage('');
     } finally {
@@ -142,7 +148,7 @@ function NewStoryModal({ profileId, preferredGenres = [], onClose, onStoryCreate
                 placeholder="Describe the kind of story you'd like to read... (e.g., 'A noir detective story set in 1920s Chicago with supernatural elements')"
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
-                maxLength={500}
+                maxLength={MAX_CUSTOM_PROMPT_LENGTH}
               />
             )}
           </div>

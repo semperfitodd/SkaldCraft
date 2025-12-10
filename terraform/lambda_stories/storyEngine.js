@@ -54,23 +54,28 @@ const STORY_ARCHIVE_BUCKET = process.env.STORY_ARCHIVE_BUCKET;
 const STORY_ARCHIVE_PREFIX = process.env.STORY_ARCHIVE_PREFIX || 'stories/';
 exports.LENGTH_TO_NODE_COUNT = {
     short: 5,
-    medium: 10,
-    long: 20,
+    medium: 25,
+    long: 50,
 };
 const BEAT_MAPS = {
     short: ['setup', 'rising_action', 'complication', 'climax', 'resolution'],
     medium: [
-        'setup', 'setup',
+        'setup', 'setup', 'setup', 'setup', 'setup',
+        'rising_action', 'rising_action', 'rising_action', 'rising_action', 'rising_action',
         'rising_action', 'rising_action', 'rising_action',
-        'complication', 'complication',
-        'climax', 'climax',
-        'resolution',
+        'complication', 'complication', 'complication', 'complication', 'complication',
+        'climax', 'climax', 'climax', 'climax',
+        'resolution', 'resolution', 'resolution',
     ],
     long: [
-        'setup', 'setup', 'setup',
-        'rising_action', 'rising_action', 'rising_action', 'rising_action',
-        'complication', 'complication', 'complication', 'complication',
-        'climax', 'climax', 'climax', 'climax',
+        'setup', 'setup', 'setup', 'setup', 'setup', 'setup', 'setup', 'setup', 'setup', 'setup',
+        'rising_action', 'rising_action', 'rising_action', 'rising_action', 'rising_action',
+        'rising_action', 'rising_action', 'rising_action', 'rising_action', 'rising_action',
+        'rising_action', 'rising_action', 'rising_action', 'rising_action', 'rising_action',
+        'complication', 'complication', 'complication', 'complication', 'complication',
+        'complication', 'complication', 'complication', 'complication', 'complication',
+        'climax', 'climax', 'climax', 'climax', 'climax',
+        'climax', 'climax', 'climax', 'climax', 'climax',
         'resolution', 'resolution', 'resolution', 'resolution', 'resolution',
     ],
 };

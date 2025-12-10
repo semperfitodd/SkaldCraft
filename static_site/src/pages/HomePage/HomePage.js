@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Layout, Logo, Button, ProfilesMenu, ChildProfileForm } from '../../components';
+import { useState, useEffect } from 'react';
+import { Layout, Logo, ProfilesMenu, ChildProfileForm, VikingIntro } from '../../components';
 import { buildLogoutUrl } from '../../utils/auth';
 import { createChildProfile, updateChildProfile, deleteChildProfile } from '../../utils/api';
 import './HomePage.css';
@@ -17,6 +17,20 @@ function HomePage({
   const [editingChild, setEditingChild] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [showIntro, setShowIntro] = useState(false);
+
+  // Check if we should show the intro (per session)
+  useEffect(() => {
+    const hasSeenIntroThisSession = sessionStorage.getItem('skaldcraft_intro_seen');
+    if (!hasSeenIntroThisSession) {
+      setShowIntro(true);
+    }
+  }, []);
+
+  const handleIntroComplete = () => {
+    sessionStorage.setItem('skaldcraft_intro_seen', 'true');
+    setShowIntro(false);
+  };
 
   const getDisplayName = () => {
     if (activeProfile?.type === 'child' && profiles?.children) {
@@ -86,22 +100,11 @@ function HomePage({
           onSelectProfile={onSelectProfile}
           onAddProfile={() => setShowAddChild(true)}
           onEditProfile={(child) => setEditingChild(child)}
+          onNavigateToHome={null}
+          onNavigateToStories={onNavigateToStories}
+          onNavigateToSettings={onNavigateToProfile}
+          onSignOut={() => window.location.href = buildLogoutUrl()}
         />
-        <button 
-          className="home-page__profile-btn"
-          onClick={onNavigateToStories}
-        >
-          Stories
-        </button>
-        <button 
-          className="home-page__profile-btn"
-          onClick={onNavigateToProfile}
-        >
-          Settings
-        </button>
-        <Button as="a" href={buildLogoutUrl()} variant="ghost" size="sm">
-          Sign Out
-        </Button>
       </div>
     </>
   );
@@ -152,6 +155,7 @@ function HomePage({
 
   return (
     <Layout header={header}>
+      {showIntro && <VikingIntro onComplete={handleIntroComplete} />}
       <div className="home-page">
         <h1 className="home-page__greeting">
           Hello, {getDisplayName()}!

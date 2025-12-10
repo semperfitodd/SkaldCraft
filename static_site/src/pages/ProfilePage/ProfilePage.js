@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Layout, Logo, Button } from '../../components';
+import { Layout, Logo, ProfilesMenu } from '../../components';
 import ProfileForm from '../../components/ProfileForm';
 import { updateProfile } from '../../utils/api';
 import { buildLogoutUrl } from '../../utils/auth';
 import './ProfilePage.css';
 
-function ProfilePage({ profile, onProfileUpdate, onBack }) {
+const SUCCESS_MESSAGE_DURATION = 3000;
+
+function ProfilePage({ profile, profiles, activeProfile, onSelectProfile, onProfilesChange, onProfileUpdate, onNavigateToHome, onNavigateToStories, onBack }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -19,7 +21,7 @@ function ProfilePage({ profile, onProfileUpdate, onBack }) {
       const updatedProfile = await updateProfile(formData);
       onProfileUpdate(updatedProfile);
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      setTimeout(() => setSuccess(false), SUCCESS_MESSAGE_DURATION);
     } catch (err) {
       setError(err.message || 'Failed to save profile. Please try again.');
     } finally {
@@ -38,9 +40,20 @@ function ProfilePage({ profile, onProfileUpdate, onBack }) {
 
   const header = (
     <>
-      <button className="profile-page__back-btn" onClick={onBack}>← Back</button>
       <Logo size="sm" />
-      <Button as="a" href={buildLogoutUrl()} variant="ghost" size="sm">Sign Out</Button>
+      <div className="home-page__header-actions">
+        <ProfilesMenu
+          profiles={profiles}
+          activeProfile={activeProfile}
+          onSelectProfile={onSelectProfile}
+          onAddProfile={() => {}}
+          onEditProfile={() => {}}
+          onNavigateToHome={onNavigateToHome}
+          onNavigateToStories={onNavigateToStories}
+          onNavigateToSettings={null}
+          onSignOut={() => window.location.href = buildLogoutUrl()}
+        />
+      </div>
     </>
   );
 

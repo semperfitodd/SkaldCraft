@@ -14,12 +14,23 @@ struct HomeView: View {
     @State private var selectedStory: Story?
     @State private var currentNode: StoryNode?
     @State private var showNewStorySheet = false
+    @State private var contentOpacity: Double = 0
+    @State private var contentOffset: CGFloat = 30
+    @State private var showVikingIntro: Bool = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 backgroundGradient
-                content
+                
+                if showVikingIntro {
+                    VikingIntroView {
+                        showVikingIntro = false
+                    }
+                    .zIndex(1000)
+                } else {
+                    content
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -155,28 +166,42 @@ struct HomeView: View {
     }
     
     private var mainContent: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Text("Hello, \(activeDisplayName)!")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+                .font(.system(size: 36, weight: .bold))
                 .foregroundStyle(.white)
+                .opacity(contentOpacity)
+                .offset(y: contentOffset)
 
             Text("Welcome to SkaldCraft")
-                .font(.title3)
+                .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(.secondary)
+                .opacity(contentOpacity)
+                .offset(y: contentOffset)
             
             if case .child(let profileId) = activeProfile,
                let child = profiles?.children.first(where: { $0.profileId == profileId }) {
                 Text("Reading as: \(child.displayName)")
-                    .font(.subheadline)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.orange)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.orange.opacity(0.15))
-                    .clipShape(Capsule())
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(Color.orange.opacity(0.2))
+                            .shadow(color: Color.orange.opacity(0.3), radius: 8, x: 0, y: 4)
+                    )
+                    .opacity(contentOpacity)
+                    .offset(y: contentOffset)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.8)) {
+                contentOpacity = 1
+                contentOffset = 0
+            }
+        }
     }
     
     private func errorView(_ error: Error) -> some View {
@@ -208,6 +233,8 @@ struct HomeView: View {
         }
     }
     
+    private static let vikingIntroSeenKey = "hasSeenVikingIntroThisSession"
+    
     private func fetchAllData() async {
         guard let idToken = authService.idToken else {
             isLoading = false
@@ -216,6 +243,12 @@ struct HomeView: View {
 
         isLoading = true
         error = nil
+        
+        let hasSeenIntro = UserDefaults.standard.bool(forKey: Self.vikingIntroSeenKey)
+        if !hasSeenIntro {
+            showVikingIntro = true
+            UserDefaults.standard.set(true, forKey: Self.vikingIntroSeenKey)
+        }
         
         do {
             async let fetchedProfile = APIService.fetchProfile(idToken: idToken)
