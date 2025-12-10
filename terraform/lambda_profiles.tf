@@ -86,3 +86,4 @@ resource "aws_iam_policy" "lambda_profiles_dynamodb" {
   tags = var.tags
 }
 
+

@@ -12,6 +12,45 @@ const VIEW = {
   STORY_READER: 'story_reader',
 };
 
+// Parse hash to get view and storyId
+function parseHash() {
+  const hash = window.location.hash.slice(1); // Remove leading #
+  if (!hash || hash === '/') return { view: VIEW.HOME, storyId: null };
+  
+  const parts = hash.split('/').filter(Boolean);
+  if (parts[0] === 'stories' && parts[1]) {
+    return { view: VIEW.STORY_READER, storyId: parts[1] };
+  }
+  if (parts[0] === 'stories') {
+    return { view: VIEW.STORIES, storyId: null };
+  }
+  if (parts[0] === 'profile') {
+    return { view: VIEW.PROFILE, storyId: null };
+  }
+  if (parts[0] === 'onboarding') {
+    return { view: VIEW.ONBOARDING, storyId: null };
+  }
+  return { view: VIEW.HOME, storyId: null };
+}
+
+// Update hash without triggering navigation
+function updateHash(view, storyId = null) {
+  let newHash = '#/';
+  if (view === VIEW.STORIES) {
+    newHash = '#/stories';
+  } else if (view === VIEW.STORY_READER && storyId) {
+    newHash = `#/stories/${storyId}`;
+  } else if (view === VIEW.PROFILE) {
+    newHash = '#/profile';
+  } else if (view === VIEW.ONBOARDING) {
+    newHash = '#/onboarding';
+  }
+  
+  if (window.location.hash !== newHash) {
+    window.location.hash = newHash;
+  }
+}
+
 function App() {
   const { authenticated, loading: authLoading, error: authError } = useAuth();
   const [profile, setProfile] = useState(null);
@@ -34,6 +73,7 @@ function App() {
     }
   }, []);
 
+  // Load profile on authentication
   useEffect(() => {
     if (authenticated && !profile) {
       setProfileLoading(true);
@@ -41,16 +81,61 @@ function App() {
         .then(([profileData, profilesData]) => {
           setProfile(profileData);
           setProfiles(profilesData);
-          setCurrentView(profileData.onboardingComplete ? VIEW.HOME : VIEW.ONBOARDING);
+          
+          // Check hash for initial view
+          const { view, storyId } = parseHash();
+          
+          // If not onboarded, force onboarding view
+          if (!profileData.onboardingComplete) {
+            setCurrentView(VIEW.ONBOARDING);
+            updateHash(VIEW.ONBOARDING);
+          } else if (view === VIEW.STORY_READER && storyId) {
+            // Restore story reader view from URL
+            setCurrentView(VIEW.STORY_READER);
+            setCurrentStoryId(storyId);
+          } else if (view !== VIEW.ONBOARDING) {
+            // Restore other views from URL
+            setCurrentView(view);
+          } else {
+            // Default to home
+            setCurrentView(VIEW.HOME);
+            updateHash(VIEW.HOME);
+          }
         })
         .catch((err) => setProfileError(err.message))
         .finally(() => setProfileLoading(false));
     }
   }, [authenticated, profile]);
 
+  // Listen for hash changes (back/forward navigation)
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (!authenticated || !profile) return;
+      
+      const { view, storyId } = parseHash();
+      
+      // Don't allow navigating away from onboarding if not complete
+      if (!profile.onboardingComplete && view !== VIEW.ONBOARDING) {
+        updateHash(VIEW.ONBOARDING);
+        return;
+      }
+      
+      setCurrentView(view);
+      if (view === VIEW.STORY_READER && storyId) {
+        setCurrentStoryId(storyId);
+        setCurrentStory(null);
+        setCurrentNode(null);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [authenticated, profile]);
+
   const handleOnboardingComplete = (updatedProfile) => {
     setProfile(updatedProfile);
     setCurrentView(VIEW.HOME);
+    updateHash(VIEW.HOME);
   };
 
   const handleProfileUpdate = (updatedProfile) => {
@@ -70,6 +155,7 @@ function App() {
     setCurrentStoryId(null);
     setCurrentStory(null);
     setCurrentNode(null);
+    updateHash(VIEW.STORIES);
   };
 
   const handleNavigateToStory = (storyId) => {
@@ -77,6 +163,7 @@ function App() {
     setCurrentStory(null);
     setCurrentNode(null);
     setCurrentView(VIEW.STORY_READER);
+    updateHash(VIEW.STORY_READER, storyId);
   };
 
   const handleStoryCreated = (result) => {
@@ -85,6 +172,7 @@ function App() {
     setCurrentStory(result.story);
     setCurrentNode(result.rootNode);
     setCurrentView(VIEW.STORY_READER);
+    updateHash(VIEW.STORY_READER, result.story.storyId);
   };
 
   const handleStartNewStory = () => {
@@ -106,7 +194,10 @@ function App() {
       <ProfilePage
         profile={profile}
         onProfileUpdate={handleProfileUpdate}
-        onBack={() => setCurrentView(VIEW.HOME)}
+        onBack={() => {
+          setCurrentView(VIEW.HOME);
+          updateHash(VIEW.HOME);
+        }}
       />
     );
   }
@@ -162,7 +253,10 @@ function App() {
       activeProfile={activeProfile}
       onSelectProfile={handleSelectProfile}
       onProfilesChange={handleProfilesChange}
-      onNavigateToProfile={() => setCurrentView(VIEW.PROFILE)}
+      onNavigateToProfile={() => {
+        setCurrentView(VIEW.PROFILE);
+        updateHash(VIEW.PROFILE);
+      }}
       onNavigateToStories={handleNavigateToStories}
     />
   );

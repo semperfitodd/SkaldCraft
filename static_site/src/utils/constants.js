@@ -101,5 +101,6 @@ export const ADULT_AGE_THRESHOLD = 18;
 
 export const POLLING_CONFIG = {
   maxAttempts: 15,
-  intervalMs: 7000,
+  initialDelayMs: 20000,
+  intervalMs: 5000,
 };
