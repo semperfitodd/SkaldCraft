@@ -13,15 +13,6 @@
   animation: fadeIn 0.2s ease-out;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 .profiles-menu__trigger {
   display: flex;
   align-items: center;
@@ -271,7 +262,6 @@
   transform: translateY(-1px);
 }
 
-/* Mobile responsive */
 @media (max-width: 768px) {
   .profiles-menu__trigger {
     padding: 8px 12px;
@@ -350,17 +340,35 @@
   }
   
   .profiles-menu__section {
-    padding: 16px;
+    padding: 10px;
   }
   
   .profiles-menu__nav-item,
   .profiles-menu__item {
-    font-size: 16px;
-    padding: 14px;
+    font-size: 14px;
+    padding: 10px;
+    margin-bottom: 6px;
   }
   
   .profiles-menu__section-title {
+    font-size: 11px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+  }
+
+  .profiles-menu__add-btn,
+  .profiles-menu__signout-btn {
+    padding: 10px;
     font-size: 13px;
-    padding: 8px;
+  }
+
+  .profiles-menu__item-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .profiles-menu__nav-icon {
+    font-size: 18px;
   }
 }
