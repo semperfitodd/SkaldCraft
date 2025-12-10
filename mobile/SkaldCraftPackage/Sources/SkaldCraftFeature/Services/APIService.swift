@@ -797,15 +797,21 @@ enum APIService {
     static func pollStoryReady(idToken: String, initialStory: Story, maxAttempts: Int = AppConstants.Polling.maxAttempts, intervalSeconds: Double = AppConstants.Polling.intervalSeconds) async throws -> StoryCurrentResponse {
         print("[APIService] Polling story \(initialStory.storyId) for ready status...")
         
-        for attempt in 1...maxAttempts {
-            try await Task.sleep(for: .seconds(intervalSeconds))
+        // Wait initial delay before first poll
+        try await Task.sleep(for: .seconds(AppConstants.Polling.initialDelaySeconds))
             
+        for attempt in 1...maxAttempts {
             let story = try await fetchStory(idToken: idToken, storyId: initialStory.storyId)
             print("[APIService] Poll attempt \(attempt)/\(maxAttempts): status = \(story.status.rawValue)")
             
             if !story.status.isGenerating {
                 let current = try await fetchStoryCurrent(idToken: idToken, storyId: initialStory.storyId)
                 return current
+            }
+            
+            // Wait between polls (but not after the last attempt)
+            if attempt < maxAttempts {
+                try await Task.sleep(for: .seconds(intervalSeconds))
             }
         }
         
@@ -815,9 +821,10 @@ enum APIService {
     static func pollChapterReady(idToken: String, updatedStory: Story, expectedChapterIndex: Int, maxAttempts: Int = AppConstants.Polling.maxAttempts, intervalSeconds: Double = AppConstants.Polling.intervalSeconds) async throws -> StoryCurrentResponse {
         print("[APIService] Polling story \(updatedStory.storyId) for chapter \(expectedChapterIndex)...")
         
-        for attempt in 1...maxAttempts {
-            try await Task.sleep(for: .seconds(intervalSeconds))
+        // Wait initial delay before first poll
+        try await Task.sleep(for: .seconds(AppConstants.Polling.initialDelaySeconds))
             
+        for attempt in 1...maxAttempts {
             let story = try await fetchStory(idToken: idToken, storyId: updatedStory.storyId)
             print("[APIService] Poll attempt \(attempt)/\(maxAttempts): status = \(story.status.rawValue)")
             
@@ -826,6 +833,11 @@ enum APIService {
                 if current.currentNode.chapterIndex >= expectedChapterIndex {
                     return current
                 }
+            }
+            
+            // Wait between polls (but not after the last attempt)
+            if attempt < maxAttempts {
+                try await Task.sleep(for: .seconds(intervalSeconds))
             }
         }
         

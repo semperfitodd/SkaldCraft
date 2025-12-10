@@ -83,23 +83,22 @@ SkaldCraft remembers and learns your style over time, tailoring stories with unc
 
 ### Infrastructure Setup
 
-1. Navigate to the terraform directory:
+1. Configure Terraform variables (see [Configuration](#configuration)):
 
 ```bash
 cd terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
 ```
 
-2. Create a `terraform.tfvars` file (see [Configuration](#terraform-variables))
-
-3. Initialize and apply:
+2. Deploy infrastructure:
 
 ```bash
 terraform init
-terraform plan
 terraform apply
 ```
 
-4. Note the outputs for configuring the web application:
+3. Save the outputs for application configuration:
 
 ```bash
 terraform output
@@ -107,27 +106,22 @@ terraform output
 
 ### Web Application Setup
 
-1. Navigate to the static site directory:
+1. Configure environment (see [Configuration](#configuration)):
 
 ```bash
 cd static_site
+cp .env.example .env
+# Edit .env with values from terraform output
 ```
 
-2. Install dependencies:
+2. Install and run:
 
 ```bash
 npm install
-```
-
-3. Create a `.env` file (see [Configuration](#environment-variables))
-
-4. Start the development server:
-
-```bash
 npm start
 ```
 
-5. Build for production:
+3. Build for production:
 
 ```bash
 npm run build
@@ -135,93 +129,59 @@ npm run build
 
 ### Mobile Application Setup
 
-1. Navigate to the mobile directory:
+1. Configure secrets (see [Configuration](#configuration)):
+
+```bash
+cd mobile/SkaldCraftPackage/Sources/SkaldCraftFeature/Config
+cp Secrets.swift.example Secrets.swift
+# Edit Secrets.swift with values from terraform output
+```
+
+2. Open in Xcode and run:
 
 ```bash
 cd mobile
-```
-
-2. Open the workspace in Xcode:
-
-```bash
 open SkaldCraft.xcworkspace
 ```
-
-3. Configure signing and capabilities in Xcode
-
-4. Build and run on simulator or device
 
 ## Configuration
 
 ### Terraform Variables
 
-Create `terraform/terraform.tfvars`:
-
-```hcl
-# Required
-app_name    = "skaldcraft"
-domain      = "example.com"
-environment = "prod"
-region      = "us-east-1"
-
-# Apple Sign In (optional - leave empty to disable)
-apple_app_id      = "com.example.skaldcraft-sid"
-apple_key_id      = "XXXXXXXXXX"
-apple_private_key = "BASE64_ENCODED_PRIVATE_KEY"
-apple_team_id     = "XXXXXXXXXX"
-
-# Google Sign In (optional - leave empty to disable)
-google_client_id     = "123456789-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
-google_client_secret = "GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx"
-
-# Optional
-tags = {
-  Project = "SkaldCraft"
-  Owner   = "YourName"
-}
-```
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `app_name` | Application name for resources and mobile deep links | Yes |
-| `domain` | Base domain (e.g., `example.com`) | Yes |
-| `environment` | Environment name (e.g., `dev`, `staging`, `prod`) | Yes |
-| `region` | AWS region | Yes |
-| `apple_app_id` | Apple Services ID | No |
-| `apple_key_id` | Apple Key ID | No |
-| `apple_private_key` | Base64-encoded Apple private key | No |
-| `apple_team_id` | Apple Team ID | No |
-| `google_client_id` | Google OAuth Client ID | No |
-| `google_client_secret` | Google OAuth Client Secret | No |
-| `bedrock_model_id` | AWS Bedrock model ID | No |
-| `tags` | Additional resource tags | No |
-
-### Environment Variables
-
-Create `static_site/.env`:
+Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and fill in your values:
 
 ```bash
-# Required - obtain from terraform output
-REACT_APP_COGNITO_USER_POOL_ID=us-east-1_XXXXXXXXX
-REACT_APP_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
-REACT_APP_COGNITO_DOMAIN=prod-auth.example.com
-
-# Optional - defaults to current origin
-REACT_APP_REDIRECT_URI=https://prod.example.com/auth/callback
-REACT_APP_LOGOUT_URI=https://prod.example.com/logout
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 ```
 
-For local development:
+Required variables:
+- `environment` - Environment name (e.g., `dev`, `prod`)
+- `region` - AWS region
+- `domain` - Your domain name
+- `app_name` - Application name
+
+Optional OAuth providers (leave empty to disable):
+- Apple Sign In credentials
+- Google Sign In credentials
+
+### Web Application
+
+Copy `static_site/.env.example` to `static_site/.env` and configure with values from `terraform output`:
 
 ```bash
-REACT_APP_COGNITO_USER_POOL_ID=us-east-1_XXXXXXXXX
-REACT_APP_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
-REACT_APP_COGNITO_DOMAIN=prod-auth.example.com
-REACT_APP_REDIRECT_URI=http://localhost:3000/auth/callback
-REACT_APP_LOGOUT_URI=http://localhost:3000/logout
+cp static_site/.env.example static_site/.env
 ```
 
-Note: Add `http://localhost:3000/auth/callback` and `http://localhost:3000/logout` to your Cognito callback/logout URLs for local development.
+### Mobile Application
+
+Copy `mobile/SkaldCraftPackage/Sources/SkaldCraftFeature/Config/Secrets.swift.example` to `Secrets.swift`:
+
+```bash
+cp mobile/SkaldCraftPackage/Sources/SkaldCraftFeature/Config/Secrets.swift.example \
+   mobile/SkaldCraftPackage/Sources/SkaldCraftFeature/Config/Secrets.swift
+```
+
+Configure with values from `terraform output`.
 
 ## OAuth Provider Setup
 

@@ -141,6 +141,9 @@ export async function createAdultStory(payload) {
 export async function pollStoryReady(storyId, maxAttempts = POLLING_CONFIG.maxAttempts, intervalMs = POLLING_CONFIG.intervalMs) {
   console.log('[API] Polling for story ready:', storyId);
   
+  // Wait initial delay before first poll
+  await new Promise(resolve => setTimeout(resolve, POLLING_CONFIG.initialDelayMs));
+  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const story = await fetchStory(storyId);
     console.log('[API] Poll attempt', attempt + 1, 'status:', story.status);
@@ -158,7 +161,10 @@ export async function pollStoryReady(storyId, maxAttempts = POLLING_CONFIG.maxAt
       throw new Error(`Unexpected story status: ${story.status}`);
     }
     
+    // Wait between polls (but not after the last attempt)
+    if (attempt < maxAttempts - 1) {
     await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
   }
   
   throw new Error('Story generation timed out');
@@ -166,6 +172,9 @@ export async function pollStoryReady(storyId, maxAttempts = POLLING_CONFIG.maxAt
 
 export async function pollChapterReady(storyId, expectedChapterIndex, maxAttempts = POLLING_CONFIG.maxAttempts, intervalMs = POLLING_CONFIG.intervalMs) {
   console.log('[API] Polling for chapter ready:', storyId, 'chapter:', expectedChapterIndex);
+  
+  // Wait initial delay before first poll
+  await new Promise(resolve => setTimeout(resolve, POLLING_CONFIG.initialDelayMs));
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const story = await fetchStory(storyId);
@@ -186,7 +195,10 @@ export async function pollChapterReady(storyId, expectedChapterIndex, maxAttempt
       throw new Error(`Unexpected story status: ${story.status}`);
     }
     
+    // Wait between polls (but not after the last attempt)
+    if (attempt < maxAttempts - 1) {
     await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
   }
   
   throw new Error('Chapter generation timed out');

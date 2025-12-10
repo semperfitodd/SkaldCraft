@@ -84,23 +84,27 @@ struct StoryReaderView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                HStack(spacing: 12) {
+                Button {
+                    onBack()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text("Stories")
+                    }
+                }
+            }
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                if let outline = story?.outline, !outline.isEmpty {
                     Button {
-                        onBack()
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showChapterList.toggle()
+                        }
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                            Text("Stories")
-                        }
-                    }
-                    
-                    if story?.outline.isEmpty == false {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showChapterList.toggle()
-                            }
-                        } label: {
                             Image(systemName: showChapterList ? "sidebar.left" : "list.bullet")
+                            Text("Chapters")
+                                .font(.subheadline)
                         }
                     }
                 }
@@ -148,31 +152,47 @@ struct StoryReaderView: View {
     }
     
     @ViewBuilder
+    private func chapterSidebarHeader(story: Story) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Chapters")
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+            
+            Text(isCompleted ? "Completed" : "\((currentNode?.chapterIndex ?? 0) + 1) of \(story.targetNodeCount)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black.opacity(0.3))
+    }
+    
+    @ViewBuilder
+    private func chapterSidebarContent(story: Story) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 6) {
+                ForEach(story.outline) { chapter in
+                    chapterListItem(chapter: chapter, story: story)
+                }
+            }
+            .padding(8)
+        }
+    }
+    
+    @ViewBuilder
     private func chapterSidebar(story: Story) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Chapters")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                
-                Text(isCompleted ? "Completed" : "\(min((currentNode?.chapterIndex ?? 0) + 1, story.targetNodeCount)) of \(story.targetNodeCount)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.black.opacity(0.2))
-            
-            ScrollView {
-                LazyVStack(spacing: 4) {
-                    ForEach(story.outline) { chapter in
-                        chapterListItem(chapter: chapter, story: story)
-                    }
-                }
-                .padding(8)
-            }
+            chapterSidebarHeader(story: story)
+            chapterSidebarContent(story: story)
         }
-        .background(Color.black.opacity(0.3))
+        .background(Color.black.opacity(0.25))
+        .overlay(
+            Rectangle()
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 1),
+            alignment: .trailing
+        )
     }
     
     @ViewBuilder
@@ -248,42 +268,52 @@ struct StoryReaderView: View {
                 Task { await selectChapter(chapter.chapterIndex) }
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Text("\(chapter.chapterIndex + 1)")
                     .font(.caption)
-                    .fontWeight(.semibold)
-                    .frame(width: 24, height: 24)
-                    .background(isCurrent ? Color.orange : Color.white.opacity(0.2))
-                    .foregroundStyle(isCurrent ? .white : .secondary)
+                    .fontWeight(.bold)
+                    .frame(width: 26, height: 26)
+                    .background(isCurrent ? Color.orange : Color.white.opacity(0.15))
+                    .foregroundStyle(isCurrent ? .white : .white.opacity(0.7))
                     .clipShape(Circle())
                 
-                Text(chapter.title.replacingOccurrences(of: "Chapter \\d+:\\s*", with: "", options: .regularExpression))
-                    .font(.subheadline)
-                    .foregroundStyle(isAvailable ? .white : .secondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(chapter.title.replacingOccurrences(of: "Chapter \\d+:\\s*", with: "", options: .regularExpression))
+                        .font(.subheadline)
+                        .fontWeight(isActive ? .semibold : .regular)
+                        .foregroundStyle(isAvailable ? .white : .white.opacity(0.4))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    
+                    if isActive && !isArchived {
+                        Text("Current")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                }
                 
                 Spacer()
-                
-                if isActive {
-                    Text("•")
-                        .font(.title)
-                        .foregroundStyle(.orange)
-                }
                 
                 if !isAvailable {
                     Image(systemName: "lock.fill")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.3))
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(isCurrent ? Color.orange.opacity(0.2) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isCurrent ? Color.orange.opacity(0.25) : Color.white.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isCurrent ? Color.orange.opacity(0.5) : Color.clear, lineWidth: 2)
+            )
         }
         .buttonStyle(.plain)
         .disabled(!isAvailable)
+        .opacity(isAvailable ? 1 : 0.5)
     }
     
     private func isChapterAvailable(chapter: OutlineChapter) -> Bool {
