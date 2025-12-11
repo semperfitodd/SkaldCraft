@@ -466,6 +466,36 @@ struct CreateAdultStoryResponse: Codable, Sendable {
     let status: String
 }
 
+enum ReadingPurpose: String, Codable, CaseIterable, Sendable {
+    case school = "school"
+    case fun = "fun"
+    case bedtime = "bedtime"
+    
+    var label: String {
+        switch self {
+        case .school: return "School Reading"
+        case .fun: return "Just for Fun"
+        case .bedtime: return "Bedtime Story"
+        }
+    }
+}
+
+struct CreateChildStoryRequest: Codable, Sendable {
+    let profileId: String
+    let readingLevel: String
+    let readingAgeBand: ReadingAgeBand
+    let readingPurpose: ReadingPurpose
+    let targetLength: StoryLength
+    var age: Int?
+    var genre: String?
+    var customPrompt: String?
+}
+
+struct CreateChildStoryResponse: Codable, Sendable {
+    let story: Story
+    let status: String
+}
+
 struct ContinueStoryRequest: Codable, Sendable {
     let choiceId: String
     var userHint: String?
@@ -793,6 +823,39 @@ enum APIService {
         return try handleResponse(data, response)
     }
     
+    static func createChildStory(idToken: String, request storyRequest: CreateChildStoryRequest) async throws -> CreateChildStoryResponse {
+        guard var request = createRequest(path: "/stories/child", method: "POST", idToken: idToken) else {
+            throw APIError.invalidURL
+        }
+        let encoder = JSONEncoder()
+        let bodyData = try encoder.encode(storyRequest)
+        request.httpBody = bodyData
+        
+        print("[APIService] Creating child story for profile: \(storyRequest.profileId)")
+        if let bodyString = String(data: bodyData, encoding: .utf8) {
+            print("[APIService] Request body: \(bodyString)")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        return try handleResponse(data, response)
+    }
+    
+    static func continueChildStory(idToken: String, storyId: String, request continueRequest: ContinueStoryRequest) async throws -> ContinueStoryResponse {
+        guard var request = createRequest(path: "/stories/child/\(storyId)/continue", method: "POST", idToken: idToken) else {
+            throw APIError.invalidURL
+        }
+        request.httpBody = try JSONEncoder().encode(continueRequest)
+        
+        print("[APIService] Continuing child story \(storyId) with choice: \(continueRequest.choiceId)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("[APIService] Continue response: \(responseString)")
+        }
+        
+        return try handleResponse(data, response)
+    }
     
     static func pollStoryReady(idToken: String, initialStory: Story, maxAttempts: Int = AppConstants.Polling.maxAttempts, intervalSeconds: Double = AppConstants.Polling.intervalSeconds) async throws -> StoryCurrentResponse {
         print("[APIService] Polling story \(initialStory.storyId) for ready status...")

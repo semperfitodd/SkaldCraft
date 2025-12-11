@@ -70,7 +70,8 @@ data "aws_iam_policy_document" "lambda_stories_dynamodb" {
       "dynamodb:GetItem"
     ]
     resources = [
-      aws_dynamodb_table.users.arn
+      aws_dynamodb_table.users.arn,
+      aws_dynamodb_table.child_profiles.arn
     ]
   }
 }
@@ -119,6 +120,8 @@ module "lambda_archive_stream" {
     }
   ]
 
+  layers = [aws_lambda_layer_version.lambda_shared.arn]
+
   attach_policies    = true
   number_of_policies = 3
   policies = [
@@ -149,6 +152,7 @@ module "lambda_stories" {
     STORIES_TABLE             = aws_dynamodb_table.stories.name
     STORY_NODES_TABLE         = aws_dynamodb_table.story_nodes.name
     USERS_TABLE               = aws_dynamodb_table.users.name
+    CHILD_PROFILES_TABLE      = aws_dynamodb_table.child_profiles.name
     ADULT_STORY_MODEL_ID      = var.adult_story_model_id
     ADULT_SUMMARIZER_MODEL_ID = var.adult_summarizer_model_id
     STORY_ARCHIVE_BUCKET      = module.story_archive_bucket.s3_bucket_id
@@ -167,6 +171,8 @@ module "lambda_stories" {
       ]
     }
   ]
+
+  layers = [aws_lambda_layer_version.lambda_shared.arn]
 
   attach_policies    = true
   number_of_policies = 5

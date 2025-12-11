@@ -631,6 +631,10 @@ Write the next full chapter (700-900 words), picking up immediately after the ch
   return content;
 }
 
+// ============================================================================
+// SHARED HELPER FUNCTIONS
+// ============================================================================
+
 function buildChoices(labels: Array<{ label: string }>): StoryChoice[] {
   return labels.map((c) => ({
     choiceId: randomUUID(),

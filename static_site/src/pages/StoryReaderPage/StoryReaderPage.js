@@ -5,9 +5,11 @@ import {
   fetchStory, 
   fetchStoryNode, 
   continueAdultStory,
+  continueChildStory,
   pollChapterReady,
   fetchStoryArchive,
-  fetchStoryChapter
+  fetchStoryChapter,
+  isChildProfile
 } from '../../utils/api';
 import './StoryReaderPage.css';
 
@@ -42,6 +44,7 @@ function StoryReaderPage({
 
   const isCompleted = story?.status === 'completed';
   const isArchived = story?.isArchived;
+  const isChild = isChildProfile(activeProfile);
 
   useEffect(() => {
     const handleResize = () => {
@@ -97,7 +100,13 @@ function StoryReaderPage({
 
     try {
       const expectedChapterIndex = (currentNode?.chapterIndex || 0) + 1;
-      await continueAdultStory(storyId, { choiceId });
+      const isChild = isChildProfile(activeProfile);
+      
+      if (isChild) {
+        await continueChildStory(storyId, { choiceId });
+      } else {
+        await continueAdultStory(storyId, { choiceId });
+      }
       
       const result = await pollChapterReady(storyId, expectedChapterIndex);
       
@@ -327,7 +336,7 @@ function StoryReaderPage({
                   <span>Loading chapter...</span>
                 </div>
               ) : (
-                <div className="story-reader__node-text">
+                <div className={`story-reader__node-text ${isChild ? 'story-reader__node-text--child' : ''}`}>
                   {formatNodeText(getCurrentChapterText())}
                 </div>
               )}
@@ -367,7 +376,7 @@ function StoryReaderPage({
                 {currentNode.choices.map((choice) => (
                   <button
                     key={choice.choiceId}
-                    className="story-reader__choice"
+                    className={`story-reader__choice ${isChild ? 'story-reader__choice--child' : ''}`}
                     onClick={() => handleChoiceClick(choice.choiceId)}
                     disabled={isContinuing}
                   >

@@ -298,6 +298,18 @@
   margin-bottom: 0;
 }
 
+/* Child-specific reading experience */
+.story-reader__node-text--child {
+  font-size: 1.25rem;
+  line-height: 2;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.story-reader__node-text--child p {
+  margin-bottom: 2em;
+}
+
 .story-reader__reading-past {
   text-align: center;
   padding: var(--space-6);
@@ -375,6 +387,25 @@
 .story-reader__choice:hover:not(:disabled) .story-reader__choice-arrow {
   transform: translateX(4px);
   color: var(--color-primary);
+}
+
+/* Child-friendly choice buttons */
+.story-reader__choice--child {
+  padding: var(--space-6);
+  font-size: 1.125rem;
+  border-width: 3px;
+  border-radius: var(--radius-xl);
+  min-height: 60px;
+}
+
+.story-reader__choice--child:hover:not(:disabled) {
+  transform: translateX(8px) scale(1.02);
+  box-shadow: 0 6px 16px rgba(245, 166, 35, 0.3);
+}
+
+.story-reader__choice--child .story-reader__choice-text {
+  font-size: 1.125rem;
+  line-height: 1.7;
 }
 
 .story-reader__ending {

@@ -1,3 +1,34 @@
+data "aws_iam_policy_document" "lambda_profiles_dynamodb" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:Query"
+    ]
+    resources = [
+      aws_dynamodb_table.users.arn,
+      "${aws_dynamodb_table.users.arn}/index/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:Query"
+    ]
+    resources = [
+      aws_dynamodb_table.child_profiles.arn,
+      "${aws_dynamodb_table.child_profiles.arn}/index/*"
+    ]
+  }
+}
+
 module "lambda_profiles" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
@@ -27,6 +58,8 @@ module "lambda_profiles" {
     }
   ]
 
+  layers = [aws_lambda_layer_version.lambda_shared.arn]
+
   attach_policies    = true
   number_of_policies = 2
   policies = [
@@ -49,42 +82,7 @@ module "lambda_profiles" {
 resource "aws_iam_policy" "lambda_profiles_dynamodb" {
   name        = "${var.environment}_lambda_profiles_dynamodb"
   description = "Allow Profiles Lambda to access Users and ChildProfiles tables"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:Query"
-        ]
-        Resource = [
-          aws_dynamodb_table.users.arn,
-          "${aws_dynamodb_table.users.arn}/index/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:Query"
-        ]
-        Resource = [
-          aws_dynamodb_table.child_profiles.arn,
-          "${aws_dynamodb_table.child_profiles.arn}/index/*"
-        ]
-      }
-    ]
-  })
+  policy      = data.aws_iam_policy_document.lambda_profiles_dynamodb.json
 
   tags = var.tags
 }
-
-
-

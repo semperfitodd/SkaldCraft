@@ -104,3 +104,9 @@ export const POLLING_CONFIG = {
   initialDelayMs: 20000,
   intervalMs: 5000,
 };
+
+export const READING_PURPOSES = [
+  { value: 'school', label: 'School Reading' },
+  { value: 'fun', label: 'Just for Fun' },
+  { value: 'bedtime', label: 'Bedtime Story' },
+];

@@ -4,16 +4,27 @@ exports.handler = void 0;
 const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
 const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
 const crypto_1 = require("crypto");
-const constants_1 = require("../lambda_shared/constants");
-const utils_1 = require("../lambda_shared/utils");
+const constants_1 = require("./constants");
 const client = new client_dynamodb_1.DynamoDBClient({});
 const docClient = lib_dynamodb_1.DynamoDBDocumentClient.from(client);
 const USERS_TABLE = process.env.USERS_TABLE;
 const CHILD_PROFILES_TABLE = process.env.CHILD_PROFILES_TABLE;
-const MAX_CHILD_PROFILES = 5;
-const VALID_READING_AGE_BANDS = constants_1.VALID_CHILD_AGE_BANDS;
+const DEFAULT_GENRES = ['fantasy'];
 function response(statusCode, body) {
     return { statusCode, headers: constants_1.CORS_HEADERS, body: JSON.stringify(body) };
+}
+function nowISO() {
+    return new Date().toISOString();
+}
+function calculateAge(birthday) {
+    const birthDate = new Date(birthday);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
 }
 function deriveAgeBand(age) {
     if (age < 5)
@@ -25,67 +36,70 @@ function deriveAgeBand(age) {
     return 'middle-school';
 }
 function enforceExplicitRule(birthday, requested) {
-    return (0, utils_1.calculateAgeFromBirthday)(birthday) >= 18 ? (requested ?? false) : false;
+    return calculateAge(birthday) >= 18 ? (requested ?? false) : false;
+}
+function isValidDate(str) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(str) && !isNaN(new Date(str).getTime());
 }
 function validateCreateChild(data) {
     if (!data.displayName?.trim())
         return 'displayName is required';
-    if (!data.birthday || !(0, utils_1.isValidDate)(data.birthday))
+    if (!data.birthday || !isValidDate(data.birthday))
         return 'birthday must be valid YYYY-MM-DD';
-    if (!constants_1.VALID_GRL_VALUES.includes(data.readingLevelGRL))
+    if (!constants_1.READING_LEVELS_GRL.includes(data.readingLevelGRL))
         return 'Invalid readingLevelGRL';
     if (!data.preferredGenres?.length)
         return 'preferredGenres required';
     for (const g of data.preferredGenres) {
-        if (!constants_1.VALID_CHILD_GENRES.includes(g))
+        if (!constants_1.CHILD_GENRES.includes(g))
             return `Invalid genre: ${g}`;
     }
-    if (data.readingAgeBand && !VALID_READING_AGE_BANDS.includes(data.readingAgeBand))
+    if (data.readingAgeBand && !constants_1.CHILD_AGE_BANDS.includes(data.readingAgeBand))
         return 'Invalid readingAgeBand';
-    if (data.defaultLanguage && !constants_1.VALID_LANGUAGES.includes(data.defaultLanguage))
+    if (data.defaultLanguage && !constants_1.LANGUAGES.includes(data.defaultLanguage))
         return 'Invalid language';
     return null;
 }
 function validateUpdateChild(data) {
     if (data.displayName !== undefined && !data.displayName.trim())
         return 'displayName cannot be empty';
-    if (data.birthday !== undefined && !(0, utils_1.isValidDate)(data.birthday))
+    if (data.birthday !== undefined && !isValidDate(data.birthday))
         return 'birthday must be valid YYYY-MM-DD';
-    if (data.readingLevelGRL !== undefined && !constants_1.VALID_GRL_VALUES.includes(data.readingLevelGRL))
+    if (data.readingLevelGRL !== undefined && !constants_1.READING_LEVELS_GRL.includes(data.readingLevelGRL))
         return 'Invalid readingLevelGRL';
     if (data.preferredGenres !== undefined) {
         if (!data.preferredGenres.length)
             return 'preferredGenres cannot be empty';
         for (const g of data.preferredGenres) {
-            if (!constants_1.VALID_CHILD_GENRES.includes(g))
+            if (!constants_1.CHILD_GENRES.includes(g))
                 return `Invalid genre: ${g}`;
         }
     }
-    if (data.readingAgeBand !== undefined && !VALID_READING_AGE_BANDS.includes(data.readingAgeBand))
+    if (data.readingAgeBand !== undefined && !constants_1.CHILD_AGE_BANDS.includes(data.readingAgeBand))
         return 'Invalid readingAgeBand';
-    if (data.defaultLanguage !== undefined && !constants_1.VALID_LANGUAGES.includes(data.defaultLanguage))
+    if (data.defaultLanguage !== undefined && !constants_1.LANGUAGES.includes(data.defaultLanguage))
         return 'Invalid language';
     return null;
 }
 function validateUpdateProfile(data) {
-    if (data.birthday !== undefined && !(0, utils_1.isValidDate)(data.birthday))
+    if (data.birthday !== undefined && !isValidDate(data.birthday))
         return 'birthday must be valid YYYY-MM-DD';
     if (data.preferredGenres !== undefined) {
         if (!data.preferredGenres.length)
             return 'preferredGenres cannot be empty';
         for (const g of data.preferredGenres) {
-            if (!constants_1.VALID_GENRES.includes(g))
+            if (!constants_1.ADULT_GENRES.includes(g))
                 return `Invalid genre: ${g}`;
         }
     }
-    if (data.defaultLanguage !== undefined && !constants_1.VALID_LANGUAGES.includes(data.defaultLanguage))
+    if (data.defaultLanguage !== undefined && !constants_1.LANGUAGES.includes(data.defaultLanguage))
         return 'Invalid language';
     return null;
 }
 function normalizeUser(user) {
     return {
         ...user,
-        preferredGenres: user.preferredGenres || constants_1.DEFAULT_GENRES,
+        preferredGenres: user.preferredGenres || DEFAULT_GENRES,
         defaultLanguage: user.defaultLanguage || constants_1.DEFAULT_LANGUAGE,
         explicitContentAllowed: user.explicitContentAllowed ?? false,
     };
@@ -101,14 +115,14 @@ function toProfileResponse(user) {
         lastLoginAt: user.lastLoginAt,
         profile: {
             birthday: user.birthday,
-            preferredGenres: user.preferredGenres || constants_1.DEFAULT_GENRES,
+            preferredGenres: user.preferredGenres || DEFAULT_GENRES,
             defaultLanguage: user.defaultLanguage || constants_1.DEFAULT_LANGUAGE,
             explicitContentAllowed: user.explicitContentAllowed ?? false,
         },
     };
 }
 async function getOrCreateUser(email, cognitoSub, givenName, familyName) {
-    const now = (0, utils_1.nowISO)();
+    const now = nowISO();
     const result = await docClient.send(new lib_dynamodb_1.GetCommand({ TableName: USERS_TABLE, Key: { email } }));
     if (result.Item) {
         const existing = result.Item;
@@ -131,7 +145,7 @@ async function getOrCreateUser(email, cognitoSub, givenName, familyName) {
         lastLoginAt: now,
         defaultProfileType: 'adult',
         onboardingComplete: false,
-        preferredGenres: constants_1.DEFAULT_GENRES,
+        preferredGenres: DEFAULT_GENRES,
         defaultLanguage: constants_1.DEFAULT_LANGUAGE,
         explicitContentAllowed: false,
     };
@@ -146,7 +160,7 @@ async function updateUser(email, updates) {
     const user = await getUser(email);
     if (!user)
         return null;
-    const now = (0, utils_1.nowISO)();
+    const now = nowISO();
     const exprs = ['lastLoginAt = :now'];
     const vals = { ':now': now };
     if (updates.birthday !== undefined) {
@@ -193,8 +207,8 @@ async function getChildProfile(parentEmail, profileId) {
     return result.Item || null;
 }
 async function createChild(parentEmail, data) {
-    const now = (0, utils_1.nowISO)();
-    const age = (0, utils_1.calculateAgeFromBirthday)(data.birthday);
+    const now = nowISO();
+    const age = calculateAge(data.birthday);
     const profile = {
         parentEmail,
         profileId: (0, crypto_1.randomUUID)(),
@@ -216,7 +230,7 @@ async function updateChild(parentEmail, profileId, updates) {
     const existing = await getChildProfile(parentEmail, profileId);
     if (!existing)
         return null;
-    const now = (0, utils_1.nowISO)();
+    const now = nowISO();
     const exprs = ['updatedAt = :now'];
     const vals = { ':now': now };
     const birthday = updates.birthday || existing.birthday;
@@ -229,7 +243,7 @@ async function updateChild(parentEmail, profileId, updates) {
         vals[':bd'] = updates.birthday;
         if (updates.readingAgeBand === undefined) {
             exprs.push('readingAgeBand = :rab');
-            vals[':rab'] = deriveAgeBand((0, utils_1.calculateAgeFromBirthday)(updates.birthday));
+            vals[':rab'] = deriveAgeBand(calculateAge(updates.birthday));
         }
     }
     if (updates.readingLevelGRL !== undefined) {
@@ -263,7 +277,7 @@ async function updateChild(parentEmail, profileId, updates) {
         displayName: updates.displayName?.trim() ?? existing.displayName,
         explicitContentAllowed: explicit,
         updatedAt: now,
-        readingAgeBand: updates.readingAgeBand ?? (updates.birthday ? deriveAgeBand((0, utils_1.calculateAgeFromBirthday)(updates.birthday)) : existing.readingAgeBand),
+        readingAgeBand: updates.readingAgeBand ?? (updates.birthday ? deriveAgeBand(calculateAge(updates.birthday)) : existing.readingAgeBand),
     };
 }
 async function deleteChild(parentEmail, profileId) {
@@ -283,13 +297,6 @@ const handler = async (event) => {
             return response(401, { error: 'Unauthorized: Missing email' });
         if (!cognitoSub)
             return response(401, { error: 'Unauthorized: Missing user ID' });
-        if (path === '/greeting' && method === 'POST') {
-            const user = await getOrCreateUser(email, cognitoSub, givenName, familyName);
-            return response(200, {
-                message: `Hello, ${user.givenName || user.email}!`,
-                user: toProfileResponse(user)
-            });
-        }
         if (path === '/me' && method === 'GET') {
             const user = await getOrCreateUser(email, cognitoSub, givenName, familyName);
             return response(200, toProfileResponse(user));
@@ -354,8 +361,8 @@ const handler = async (event) => {
             if (err)
                 return response(400, { error: err });
             const existing = await getChildProfiles(email);
-            if (existing.length >= MAX_CHILD_PROFILES) {
-                return response(400, { error: `Maximum ${MAX_CHILD_PROFILES} child profiles allowed` });
+            if (existing.length >= constants_1.MAX_CHILD_PROFILES) {
+                return response(400, { error: `Maximum ${constants_1.MAX_CHILD_PROFILES} child profiles allowed` });
             }
             const child = await createChild(email, data);
             return response(201, child);

@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MAX_CHILD_PROFILES = exports.ADULT_AGE_THRESHOLD = exports.CORS_HEADERS = exports.DEFAULT_LANGUAGE = exports.LANGUAGES = exports.READING_LEVELS_GRL = exports.CHILD_AGE_BANDS = exports.CHILD_GENRES = exports.ADULT_GENRES = void 0;
+var constants_1 = require("../lambda_shared/constants");
+Object.defineProperty(exports, "ADULT_GENRES", { enumerable: true, get: function () { return constants_1.VALID_GENRES; } });
+Object.defineProperty(exports, "CHILD_GENRES", { enumerable: true, get: function () { return constants_1.VALID_CHILD_GENRES; } });
+Object.defineProperty(exports, "CHILD_AGE_BANDS", { enumerable: true, get: function () { return constants_1.VALID_CHILD_AGE_BANDS; } });
+Object.defineProperty(exports, "READING_LEVELS_GRL", { enumerable: true, get: function () { return constants_1.VALID_GRL_VALUES; } });
+Object.defineProperty(exports, "LANGUAGES", { enumerable: true, get: function () { return constants_1.VALID_LANGUAGES; } });
+Object.defineProperty(exports, "DEFAULT_LANGUAGE", { enumerable: true, get: function () { return constants_1.DEFAULT_LANGUAGE; } });
+Object.defineProperty(exports, "CORS_HEADERS", { enumerable: true, get: function () { return constants_1.CORS_HEADERS; } });
+Object.defineProperty(exports, "ADULT_AGE_THRESHOLD", { enumerable: true, get: function () { return constants_1.ADULT_AGE_THRESHOLD; } });
+exports.MAX_CHILD_PROFILES = 5;

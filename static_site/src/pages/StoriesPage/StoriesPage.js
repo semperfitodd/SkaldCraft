@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Layout, Logo, Button, Loading, ProfilesMenu } from '../../components';
 import { buildLogoutUrl } from '../../utils/auth';
-import { fetchStories, deleteStory, calculateAge } from '../../utils/api';
+import { fetchStories, deleteStory, calculateAge, isChildProfile, getProfileIdForStory } from '../../utils/api';
 import './StoriesPage.css';
 
 function StoriesPage({
@@ -20,12 +20,13 @@ function StoriesPage({
   const [error, setError] = useState(null);
   const [deletingStoryId, setDeletingStoryId] = useState(null);
 
-  const isAdultProfile = activeProfile?.type === 'adult' && 
+  const isChild = isChildProfile(activeProfile);
+  const canViewStories = isChild || (activeProfile?.type === 'adult' && 
     profile?.profile?.birthday && 
-    calculateAge(profile.profile.birthday) >= 18;
+    calculateAge(profile.profile.birthday) >= 18);
 
   useEffect(() => {
-    if (!isAdultProfile) {
+    if (!canViewStories) {
       setIsLoading(false);
       return;
     }
@@ -34,7 +35,7 @@ function StoriesPage({
       setIsLoading(true);
       setError(null);
       try {
-        const profileId = profile?.email;
+        const profileId = getProfileIdForStory(activeProfile, profile?.email);
         const fetchedStories = await fetchStories(profileId);
         setStories(fetchedStories);
       } catch (err) {
@@ -45,7 +46,7 @@ function StoriesPage({
     };
 
     loadStories();
-  }, [isAdultProfile, profile?.email]);
+  }, [canViewStories, activeProfile, profile?.email, profiles]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -105,15 +106,15 @@ function StoriesPage({
     </>
   );
 
-  if (!isAdultProfile) {
+  if (!canViewStories) {
     return (
       <Layout header={header}>
         <div className="stories-page">
           <div className="stories-page__restricted">
             <div className="stories-page__restricted-icon">🔒</div>
             <p className="stories-page__restricted-text">
-              Stories are currently available only for adult profiles.
-              Please ensure you have an adult profile selected with a verified birthdate.
+              Stories are available for adult profiles (18+) and child profiles.
+              Please ensure you have selected a valid profile with a verified birthdate.
             </p>
             <Button onClick={onNavigateToHome} variant="secondary" style={{ marginTop: '1rem' }}>
               Back to Home

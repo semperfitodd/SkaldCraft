@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks';
-import { Loading, NewStoryModal } from './components';
+import { Loading, NewStoryModal, ChildStoryModal } from './components';
 import { LoginPage, HomePage, OnboardingPage, ProfilePage, StoriesPage, StoryReaderPage } from './pages';
-import { fetchProfile, fetchProfiles } from './utils/api';
+import { fetchProfile, fetchProfiles, isChildProfile } from './utils/api';
 
 const VIEW = {
   HOME: 'home',
@@ -212,6 +212,9 @@ function App() {
   }
 
   if (currentView === VIEW.STORIES) {
+    const isChild = isChildProfile(activeProfile);
+    const childProfile = isChild ? profiles?.children?.find(c => c.profileId === activeProfile.profileId) : null;
+
     return (
       <>
         <StoriesPage
@@ -231,7 +234,15 @@ function App() {
           onNavigateToStory={handleNavigateToStory}
           onStartNewStory={handleStartNewStory}
         />
-        {showNewStoryModal && (
+        {showNewStoryModal && isChild && childProfile && (
+          <ChildStoryModal
+            childProfile={childProfile}
+            preferredGenres={childProfile.preferredGenres}
+            onClose={() => setShowNewStoryModal(false)}
+            onStoryCreated={handleStoryCreated}
+          />
+        )}
+        {showNewStoryModal && !isChild && (
           <NewStoryModal
             profileId={profile?.email}
             preferredGenres={profile?.profile?.preferredGenres}
@@ -244,6 +255,9 @@ function App() {
   }
 
   if (currentView === VIEW.STORY_READER && currentStoryId) {
+    const isChild = isChildProfile(activeProfile);
+    const childProfile = isChild ? profiles?.children?.find(c => c.profileId === activeProfile.profileId) : null;
+
     return (
       <>
         <StoryReaderPage
@@ -266,7 +280,15 @@ function App() {
           onNavigateToStories={handleNavigateToStories}
           onStartNewStory={handleStartNewStory}
         />
-        {showNewStoryModal && (
+        {showNewStoryModal && isChild && childProfile && (
+          <ChildStoryModal
+            childProfile={childProfile}
+            preferredGenres={childProfile.preferredGenres}
+            onClose={() => setShowNewStoryModal(false)}
+            onStoryCreated={handleStoryCreated}
+          />
+        )}
+        {showNewStoryModal && !isChild && (
           <NewStoryModal
             profileId={profile?.email}
             preferredGenres={profile?.profile?.preferredGenres}

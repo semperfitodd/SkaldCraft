@@ -10,6 +10,18 @@ variable "adult_summarizer_model_id" {
   default     = null
 }
 
+variable "child_story_haiku_model_id" {
+  description = "AWS Bedrock model ID for elementary child stories (K-5)"
+  type        = string
+  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+}
+
+variable "child_story_sonnet_model_id" {
+  description = "AWS Bedrock model ID for advanced child stories (6+)"
+  type        = string
+  default     = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+}
+
 variable "app_name" {
   description = "Application name for Cognito pool and mobile deep links"
   type        = string

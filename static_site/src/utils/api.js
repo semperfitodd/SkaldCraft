@@ -47,7 +47,8 @@ export {
   STORY_OPTIONS, 
   ADULT_AGE_THRESHOLD, 
   POLLING_CONFIG,
-  EXPLICIT_CONTENT_DISABLED_MESSAGE 
+  EXPLICIT_CONTENT_DISABLED_MESSAGE,
+  READING_PURPOSES
 } from './constants';
 
 export function calculateAge(birthday) {
@@ -210,4 +211,34 @@ export async function fetchStoryArchive(storyId) {
 
 export async function fetchStoryChapter(storyId, chapterIndex) {
   return apiRequest(`/stories/${storyId}/chapters/${chapterIndex}`);
+}
+
+// Child story endpoints
+export async function createChildStory(payload) {
+  const data = await apiRequest('/stories/child', { 
+    method: 'POST', 
+    body: JSON.stringify(payload) 
+  });
+  return data;
+}
+
+export async function continueChildStory(storyId, payload) {
+  const data = await apiRequest(`/stories/child/${storyId}/continue`, { 
+    method: 'POST', 
+    body: JSON.stringify(payload) 
+  });
+  return data;
+}
+
+// Helper to determine if a profile is a child profile
+export function isChildProfile(activeProfile) {
+  return activeProfile?.type === 'child';
+}
+
+// Helper to get the appropriate profile ID for API calls
+export function getProfileIdForStory(activeProfile, parentEmail) {
+  if (activeProfile?.type === 'child') {
+    return activeProfile.profileId;
+  }
+  return parentEmail;
 }

@@ -163,6 +163,26 @@ module "api_gateway" {
       }
     }
 
+    "POST /stories/child" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_child_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
+    "POST /stories/child/{storyId}/continue" = {
+      authorization_type = "JWT"
+      authorizer_key     = "cognito"
+      integration = {
+        method                 = "POST"
+        uri                    = module.lambda_child_stories.lambda_function_arn
+        payload_format_version = "2.0"
+      }
+    }
+
     "GET /stories/{storyId}" = {
       authorization_type = "JWT"
       authorizer_key     = "cognito"

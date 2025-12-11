@@ -8,7 +8,7 @@ import {
   STORY_POVS,
   STORY_LENGTHS,
   AGE_BANDS,
-  CORS_HEADERS as SHARED_CORS_HEADERS,
+  CORS_HEADERS,
   ADULT_AGE_THRESHOLD,
 } from './constants';
 import type {
@@ -44,30 +44,16 @@ import {
   LENGTH_TO_NODE_COUNT,
   type CreateAdultStoryOptions,
 } from './storyEngine';
+import type { APIGatewayEvent, APIResponse } from 'lambda_shared/types';
+import { createResponse, parseBody, calculateAgeFromBirthday } from 'lambda_shared/utils';
+import { getChildProfile, type ChildProfile } from 'lambda_shared/profileRepository';
 
 const lambdaClient = new LambdaClient({});
-const CORS_HEADERS = SHARED_CORS_HEADERS;
 
 const VALID_STATUSES: StoryStatus[] = ['in_progress', 'completed', 'abandoned'];
 const MAX_CUSTOM_PROMPT_LENGTH = 500;
 const MAX_TITLE_LENGTH = 200;
 const MAX_USER_HINT_LENGTH = 200;
-
-interface APIGatewayEvent {
-  requestContext: {
-    authorizer?: { jwt?: { claims?: { sub?: string; email?: string } } };
-    http?: { method?: string; path?: string };
-  };
-  body?: string;
-  rawPath?: string;
-  queryStringParameters?: Record<string, string>;
-}
-
-interface APIResponse {
-  statusCode: number;
-  headers: Record<string, string>;
-  body: string;
-}
 
 interface CreateStoryRequest {
   title: string;
@@ -150,19 +136,8 @@ async function invokeAsync(payload: { action: string; data: any }): Promise<void
   }
 }
 
-function calculateAge(birthday: string): number {
-  const birthDate = new Date(birthday);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-}
-
 function isAdultProfile(user: UserProfile): boolean {
-  return !!user.birthday && calculateAge(user.birthday) >= ADULT_AGE_THRESHOLD;
+  return !!user.birthday && calculateAgeFromBirthday(user.birthday) >= ADULT_AGE_THRESHOLD;
 }
 
 async function getUserProfile(email: string): Promise<UserProfile | null> {
@@ -173,6 +148,15 @@ async function getUserProfile(email: string): Promise<UserProfile | null> {
     birthday: result.Item.birthday,
     explicitContentAllowed: result.Item.explicitContentAllowed ?? false,
   };
+}
+
+async function canAccessStory(story: any, email: string): Promise<boolean> {
+  if (story.profileId === email) {
+    return true;
+  }
+  
+  const childProfile = await getChildProfile(email, story.profileId);
+  return childProfile !== null && childProfile.parentEmail === email;
 }
 
 function validateConfig(config: StoryConfig): string | null {
@@ -276,7 +260,8 @@ async function handleGetStory(storyId: string, email: string): Promise<APIRespon
   const story = await getStoryById(storyId);
   if (!story) return response(404, { error: 'Story not found' });
   
-  if (story.profileId !== email) {
+  const hasAccess = await canAccessStory(story, email);
+  if (!hasAccess) {
     return response(403, { error: 'Access denied' });
   }
 
@@ -464,12 +449,21 @@ async function handleContinueStory(email: string, storyId: string, body: string 
     return response(403, { error: 'Story continuation requires an adult profile' });
   }
 
+  // Fetch the story first to check access and get the correct profileId
+  const storyToCheck = await getStoryById(storyId);
+  if (!storyToCheck) return response(404, { error: 'Story not found' });
+  
+  const hasAccess = await canAccessStory(storyToCheck, email);
+  if (!hasAccess) {
+    return response(403, { error: 'Access denied' });
+  }
+
   try {
     const { story } = await initContinueStory({
       storyId,
       choiceId: data.choiceId,
       userEmail: email,
-      profileId: email,
+      profileId: storyToCheck.profileId, // Use the story's actual profileId (could be child UUID or parent email)
       userHint: data.userHint,
     });
 
@@ -514,7 +508,8 @@ async function handleGetStoryCurrent(email: string, storyId: string): Promise<AP
   const story = await getStoryById(storyId);
   if (!story) return response(404, { error: 'Story not found' });
   
-  if (story.profileId !== email) {
+  const hasAccess = await canAccessStory(story, email);
+  if (!hasAccess) {
     return response(403, { error: 'Access denied' });
   }
 
@@ -537,7 +532,8 @@ async function handleGetStoryArchive(email: string, storyId: string): Promise<AP
   const story = await getStoryById(storyId);
   if (!story) return response(404, { error: 'Story not found' });
   
-  if (story.profileId !== email) {
+  const hasAccess = await canAccessStory(story, email);
+  if (!hasAccess) {
     return response(403, { error: 'Access denied' });
   }
 
@@ -570,7 +566,8 @@ async function handleGetStoryChapter(email: string, storyId: string, chapterInde
   const story = await getStoryById(storyId);
   if (!story) return response(404, { error: 'Story not found' });
   
-  if (story.profileId !== email) {
+  const hasAccess = await canAccessStory(story, email);
+  if (!hasAccess) {
     return response(403, { error: 'Access denied' });
   }
 
@@ -605,6 +602,7 @@ async function handleGetStoryChapter(email: string, storyId: string, chapterInde
     outline: story.outline[chapterIndex],
   });
 }
+
 
 export const handler = async (event: APIGatewayEvent | any, context: any): Promise<APIResponse | void> => {
   // Handle background invocations (async invoke from same Lambda)
