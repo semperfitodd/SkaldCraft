@@ -37,10 +37,25 @@ function StoryReaderPage({
   const [isContinuing, setIsContinuing] = useState(false);
   const [error, setError] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > DESKTOP_BREAKPOINT);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth > DESKTOP_BREAKPOINT);
   const contentRef = useRef(null);
 
   const isCompleted = story?.status === 'completed';
   const isArchived = story?.isArchived;
+
+  useEffect(() => {
+    const handleResize = () => {
+      const desktop = window.innerWidth > DESKTOP_BREAKPOINT;
+      setIsDesktop(desktop);
+      // On desktop, default to open; on mobile, keep current state
+      if (desktop && !sidebarOpen) {
+        setSidebarOpen(true);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [sidebarOpen]);
 
   useEffect(() => {
     if (initialStory && initialNode) {
@@ -109,7 +124,7 @@ function StoryReaderPage({
     setError(null);
     
     // Close sidebar on mobile after selecting a chapter
-    if (window.innerWidth <= DESKTOP_BREAKPOINT) {
+    if (!isDesktop) {
       setSidebarOpen(false);
     }
     
@@ -231,7 +246,7 @@ function StoryReaderPage({
   return (
     <Layout header={header}>
       <div className="story-reader story-reader--two-pane">
-        {sidebarOpen && window.innerWidth <= DESKTOP_BREAKPOINT && (
+        {sidebarOpen && !isDesktop && (
           <div 
             className="story-reader__sidebar-backdrop"
             onClick={() => setSidebarOpen(false)}
