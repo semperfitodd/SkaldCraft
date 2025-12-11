@@ -15,35 +15,21 @@ import {
   READING_LEVELS_GRL,
   LANGUAGES,
   DEFAULT_LANGUAGE,
-  CORS_HEADERS as SHARED_CORS_HEADERS,
+  CORS_HEADERS,
   MAX_CHILD_PROFILES,
   ADULT_AGE_THRESHOLD,
 } from './constants';
+import type { APIGatewayEvent, APIResponse } from 'lambda_shared/types';
+import { createResponse, parseBody } from 'lambda_shared/utils';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
 const USERS_TABLE = process.env.USERS_TABLE!;
 const CHILD_PROFILES_TABLE = process.env.CHILD_PROFILES_TABLE!;
-const CORS_HEADERS = SHARED_CORS_HEADERS;
 const DEFAULT_GENRES = ['fantasy'];
 
 type ReadingAgeBand = typeof CHILD_AGE_BANDS[number];
-
-interface APIGatewayEvent {
-  requestContext: {
-    authorizer?: { jwt?: { claims?: { sub?: string; email?: string; given_name?: string; family_name?: string } } };
-    http?: { method?: string; path?: string };
-  };
-  body?: string;
-  rawPath?: string;
-}
-
-interface APIResponse {
-  statusCode: number;
-  headers: Record<string, string>;
-  body: string;
-}
 
 interface UserRecord {
   email: string;

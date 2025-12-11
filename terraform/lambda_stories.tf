@@ -119,6 +119,8 @@ module "lambda_archive_stream" {
     }
   ]
 
+  layers = [aws_lambda_layer_version.lambda_shared.arn]
+
   attach_policies    = true
   number_of_policies = 3
   policies = [
@@ -167,6 +169,8 @@ module "lambda_stories" {
       ]
     }
   ]
+
+  layers = [aws_lambda_layer_version.lambda_shared.arn]
 
   attach_policies    = true
   number_of_policies = 5

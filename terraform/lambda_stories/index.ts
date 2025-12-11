@@ -8,7 +8,7 @@ import {
   STORY_POVS,
   STORY_LENGTHS,
   AGE_BANDS,
-  CORS_HEADERS as SHARED_CORS_HEADERS,
+  CORS_HEADERS,
   ADULT_AGE_THRESHOLD,
 } from './constants';
 import type {
@@ -44,30 +44,15 @@ import {
   LENGTH_TO_NODE_COUNT,
   type CreateAdultStoryOptions,
 } from './storyEngine';
+import type { APIGatewayEvent, APIResponse } from 'lambda_shared/types';
+import { createResponse, parseBody } from 'lambda_shared/utils';
 
 const lambdaClient = new LambdaClient({});
-const CORS_HEADERS = SHARED_CORS_HEADERS;
 
 const VALID_STATUSES: StoryStatus[] = ['in_progress', 'completed', 'abandoned'];
 const MAX_CUSTOM_PROMPT_LENGTH = 500;
 const MAX_TITLE_LENGTH = 200;
 const MAX_USER_HINT_LENGTH = 200;
-
-interface APIGatewayEvent {
-  requestContext: {
-    authorizer?: { jwt?: { claims?: { sub?: string; email?: string } } };
-    http?: { method?: string; path?: string };
-  };
-  body?: string;
-  rawPath?: string;
-  queryStringParameters?: Record<string, string>;
-}
-
-interface APIResponse {
-  statusCode: number;
-  headers: Record<string, string>;
-  body: string;
-}
 
 interface CreateStoryRequest {
   title: string;
@@ -605,6 +590,7 @@ async function handleGetStoryChapter(email: string, storyId: string, chapterInde
     outline: story.outline[chapterIndex],
   });
 }
+
 
 export const handler = async (event: APIGatewayEvent | any, context: any): Promise<APIResponse | void> => {
   // Handle background invocations (async invoke from same Lambda)

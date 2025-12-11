@@ -9,10 +9,9 @@ const client = new client_dynamodb_1.DynamoDBClient({});
 const docClient = lib_dynamodb_1.DynamoDBDocumentClient.from(client);
 const USERS_TABLE = process.env.USERS_TABLE;
 const CHILD_PROFILES_TABLE = process.env.CHILD_PROFILES_TABLE;
-const CORS_HEADERS = constants_1.CORS_HEADERS;
 const DEFAULT_GENRES = ['fantasy'];
 function response(statusCode, body) {
-    return { statusCode, headers: CORS_HEADERS, body: JSON.stringify(body) };
+    return { statusCode, headers: constants_1.CORS_HEADERS, body: JSON.stringify(body) };
 }
 function nowISO() {
     return new Date().toISOString();
