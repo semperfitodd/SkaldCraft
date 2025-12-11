@@ -7,6 +7,12 @@
 **/node_modules/*
 package-lock.json
 
+# Lambda build artifacts (TypeScript compilation output)
+terraform/lambda_*/lambda_*/
+terraform/lambda_*/lambda_shared/
+terraform/lambda_*/*.js
+terraform/lambda_shared/*.js
+
 # secrets
 **/Secrets.plist
 **/GoogleService-Info.plist
