@@ -8,6 +8,7 @@ const constants_1 = require("./constants");
 const repository_1 = require("./repository");
 const storyEngine_1 = require("./storyEngine");
 const utils_1 = require("lambda_shared/utils");
+const profileRepository_1 = require("lambda_shared/profileRepository");
 const lambdaClient = new client_lambda_1.LambdaClient({});
 const MAX_CUSTOM_PROMPT_LENGTH = 500;
 const MAX_TITLE_LENGTH = 200;
@@ -37,18 +38,8 @@ async function invokeAsync(payload) {
         throw error;
     }
 }
-function calculateAge(birthday) {
-    const birthDate = new Date(birthday);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age;
-}
 function isAdultProfile(user) {
-    return !!user.birthday && calculateAge(user.birthday) >= constants_1.ADULT_AGE_THRESHOLD;
+    return !!user.birthday && (0, utils_1.calculateAgeFromBirthday)(user.birthday) >= constants_1.ADULT_AGE_THRESHOLD;
 }
 async function getUserProfile(email) {
     const result = await docClient.send(new lib_dynamodb_1.GetCommand({ TableName: USERS_TABLE, Key: { email } }));
@@ -107,19 +98,27 @@ async function handleCreateChildStory(email, body) {
     const user = await getUserProfile(email);
     if (!user)
         return (0, utils_1.createResponse)(404, { error: 'User profile not found' });
-    if (isAdultProfile(user)) {
-        return (0, utils_1.createResponse)(403, { error: 'Child story creation requires a child profile with verified age' });
+    // Fetch the child profile
+    const childProfile = await (0, profileRepository_1.getChildProfile)(email, data.profileId);
+    if (!childProfile) {
+        return (0, utils_1.createResponse)(404, { error: 'Child profile not found' });
     }
-    if (data.profileId !== email) {
-        return (0, utils_1.createResponse)(403, { error: 'profileId must match authenticated user email' });
+    // Verify the child profile belongs to the authenticated parent
+    if (childProfile.parentEmail !== email) {
+        return (0, utils_1.createResponse)(403, { error: 'You do not have permission to create stories for this profile' });
     }
+    // Verify the child has a birthday
+    if (!childProfile.birthday) {
+        return (0, utils_1.createResponse)(403, { error: 'Child profile requires a verified birthday' });
+    }
+    const childAge = (0, utils_1.calculateAgeFromBirthday)(childProfile.birthday);
     const storyOptions = {
         profileId: data.profileId,
         userEmail: email,
         readingPurpose: data.readingPurpose,
-        readingLevel: data.readingLevel,
+        readingLevel: data.readingLevel || childProfile.readingLevelGRL,
         gradeLevel: data.gradeLevel,
-        age: data.age,
+        age: data.age || childAge,
         title: data.title ?? undefined,
         genre: data.genre,
         tone: data.tone,
@@ -160,17 +159,20 @@ async function handleContinueChildStory(email, storyId, body) {
     const user = await getUserProfile(email);
     if (!user)
         return (0, utils_1.createResponse)(404, { error: 'User profile not found' });
-    if (isAdultProfile(user)) {
-        return (0, utils_1.createResponse)(403, { error: 'Child story continuation requires a child profile' });
-    }
     const story = await (0, repository_1.getStoryById)(storyId);
     if (!story)
         return (0, utils_1.createResponse)(404, { error: 'Story not found' });
-    if (story.profileId !== email) {
-        return (0, utils_1.createResponse)(403, { error: 'Story does not belong to this profile' });
+    // Fetch the child profile to verify ownership
+    const childProfile = await (0, profileRepository_1.getChildProfile)(email, story.profileId);
+    if (!childProfile) {
+        return (0, utils_1.createResponse)(404, { error: 'Child profile not found' });
+    }
+    // Verify the child profile belongs to the authenticated parent
+    if (childProfile.parentEmail !== email) {
+        return (0, utils_1.createResponse)(403, { error: 'Story does not belong to a profile you own' });
     }
     const childOptions = {
-        profileId: email,
+        profileId: story.profileId, // Use the story's actual profileId (child UUID)
         userEmail: email,
         readingPurpose: 'fun',
         readingLevel: story.config.readingLevelGRL || null,
@@ -186,7 +188,7 @@ async function handleContinueChildStory(email, storyId, body) {
             storyId,
             choiceId: data.choiceId,
             userEmail: email,
-            profileId: email,
+            profileId: story.profileId, // Use the story's actual profileId (child UUID)
             userHint: data.userHint,
         });
         console.log('[ChildStories] Continue initialized', {

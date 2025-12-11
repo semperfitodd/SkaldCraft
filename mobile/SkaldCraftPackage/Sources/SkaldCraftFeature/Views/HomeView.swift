@@ -77,6 +77,7 @@ struct HomeView: View {
                     StoryReaderView(
                         story: $selectedStory,
                         currentNode: $currentNode,
+                        activeProfile: activeProfile,
                         onBack: {
                             selectedStory = nil
                             currentNode = nil
@@ -127,16 +128,29 @@ struct HomeView: View {
             .environment(authService)
         }
         .sheet(isPresented: $showNewStorySheet) {
-            NewAdultStoryView(
-                profileId: profile?.email ?? "",
-                preferredGenres: profile?.profile.preferredGenres ?? [],
-                onStoryCreated: { story, node in
-                    selectedStory = story
-                    currentNode = node
-                    showNewStorySheet = false
-                }
-            )
-            .environment(authService)
+            if case .child(let profileId) = activeProfile,
+               let childProfile = profiles?.children.first(where: { $0.profileId == profileId }) {
+                NewChildStoryView(
+                    childProfile: childProfile,
+                    onStoryCreated: { story, node in
+                        selectedStory = story
+                        currentNode = node
+                        showNewStorySheet = false
+                    }
+                )
+                .environment(authService)
+            } else {
+                NewAdultStoryView(
+                    profileId: profile?.email ?? "",
+                    preferredGenres: profile?.profile.preferredGenres ?? [],
+                    onStoryCreated: { story, node in
+                        selectedStory = story
+                        currentNode = node
+                        showNewStorySheet = false
+                    }
+                )
+                .environment(authService)
+            }
         }
         .onChange(of: selectedStory) { _, newStory in
             if newStory != nil && !showStories {

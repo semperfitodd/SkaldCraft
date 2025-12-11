@@ -25,7 +25,8 @@ import {
   type CreateChildStoryOptions,
 } from './storyEngine';
 import type { APIGatewayEvent, APIResponse } from 'lambda_shared/types';
-import { createResponse, parseBody } from 'lambda_shared/utils';
+import { createResponse, parseBody, calculateAgeFromBirthday } from 'lambda_shared/utils';
+import { getChildProfile, type ChildProfile } from 'lambda_shared/profileRepository';
 
 const lambdaClient = new LambdaClient({});
 
@@ -67,19 +68,8 @@ async function invokeAsync(payload: { action: string; data: any }): Promise<void
   }
 }
 
-function calculateAge(birthday: string): number {
-  const birthDate = new Date(birthday);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-}
-
 function isAdultProfile(user: UserProfile): boolean {
-  return !!user.birthday && calculateAge(user.birthday) >= ADULT_AGE_THRESHOLD;
+  return !!user.birthday && calculateAgeFromBirthday(user.birthday) >= ADULT_AGE_THRESHOLD;
 }
 
 async function getUserProfile(email: string): Promise<UserProfile | null> {
@@ -134,21 +124,31 @@ async function handleCreateChildStory(email: string, body: string | undefined): 
   const user = await getUserProfile(email);
   if (!user) return createResponse(404, { error: 'User profile not found' });
 
-  if (isAdultProfile(user)) {
-    return createResponse(403, { error: 'Child story creation requires a child profile with verified age' });
+  // Fetch the child profile
+  const childProfile = await getChildProfile(email, data.profileId);
+  if (!childProfile) {
+    return createResponse(404, { error: 'Child profile not found' });
   }
 
-  if (data.profileId !== email) {
-    return createResponse(403, { error: 'profileId must match authenticated user email' });
+  // Verify the child profile belongs to the authenticated parent
+  if (childProfile.parentEmail !== email) {
+    return createResponse(403, { error: 'You do not have permission to create stories for this profile' });
   }
+
+  // Verify the child has a birthday
+  if (!childProfile.birthday) {
+    return createResponse(403, { error: 'Child profile requires a verified birthday' });
+  }
+
+  const childAge = calculateAgeFromBirthday(childProfile.birthday);
 
   const storyOptions: CreateChildStoryOptions = {
     profileId: data.profileId,
     userEmail: email,
     readingPurpose: data.readingPurpose,
-    readingLevel: data.readingLevel,
+    readingLevel: data.readingLevel || childProfile.readingLevelGRL,
     gradeLevel: data.gradeLevel,
-    age: data.age,
+    age: data.age || childAge,
     title: data.title ?? undefined,
     genre: data.genre,
     tone: data.tone,
@@ -198,18 +198,22 @@ async function handleContinueChildStory(
   const user = await getUserProfile(email);
   if (!user) return createResponse(404, { error: 'User profile not found' });
 
-  if (isAdultProfile(user)) {
-    return createResponse(403, { error: 'Child story continuation requires a child profile' });
-  }
-
   const story = await getStoryById(storyId);
   if (!story) return createResponse(404, { error: 'Story not found' });
-  if (story.profileId !== email) {
-    return createResponse(403, { error: 'Story does not belong to this profile' });
+
+  // Fetch the child profile to verify ownership
+  const childProfile = await getChildProfile(email, story.profileId);
+  if (!childProfile) {
+    return createResponse(404, { error: 'Child profile not found' });
+  }
+
+  // Verify the child profile belongs to the authenticated parent
+  if (childProfile.parentEmail !== email) {
+    return createResponse(403, { error: 'Story does not belong to a profile you own' });
   }
 
   const childOptions: CreateChildStoryOptions = {
-    profileId: email,
+    profileId: story.profileId, // Use the story's actual profileId (child UUID)
     userEmail: email,
     readingPurpose: 'fun',
     readingLevel: story.config.readingLevelGRL || null,
@@ -226,7 +230,7 @@ async function handleContinueChildStory(
       storyId,
       choiceId: data.choiceId,
       userEmail: email,
-      profileId: email,
+      profileId: story.profileId, // Use the story's actual profileId (child UUID)
       userHint: data.userHint,
     });
 

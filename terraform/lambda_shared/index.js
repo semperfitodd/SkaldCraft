@@ -19,3 +19,4 @@ __exportStar(require("./constants"), exports);
 __exportStar(require("./utils"), exports);
 __exportStar(require("./storyModels"), exports);
 __exportStar(require("./storyRepository"), exports);
+__exportStar(require("./profileRepository"), exports);

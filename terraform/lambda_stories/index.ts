@@ -45,7 +45,8 @@ import {
   type CreateAdultStoryOptions,
 } from './storyEngine';
 import type { APIGatewayEvent, APIResponse } from 'lambda_shared/types';
-import { createResponse, parseBody } from 'lambda_shared/utils';
+import { createResponse, parseBody, calculateAgeFromBirthday } from 'lambda_shared/utils';
+import { getChildProfile, type ChildProfile } from 'lambda_shared/profileRepository';
 
 const lambdaClient = new LambdaClient({});
 
@@ -135,19 +136,8 @@ async function invokeAsync(payload: { action: string; data: any }): Promise<void
   }
 }
 
-function calculateAge(birthday: string): number {
-  const birthDate = new Date(birthday);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-}
-
 function isAdultProfile(user: UserProfile): boolean {
-  return !!user.birthday && calculateAge(user.birthday) >= ADULT_AGE_THRESHOLD;
+  return !!user.birthday && calculateAgeFromBirthday(user.birthday) >= ADULT_AGE_THRESHOLD;
 }
 
 async function getUserProfile(email: string): Promise<UserProfile | null> {
@@ -158,6 +148,15 @@ async function getUserProfile(email: string): Promise<UserProfile | null> {
     birthday: result.Item.birthday,
     explicitContentAllowed: result.Item.explicitContentAllowed ?? false,
   };
+}
+
+async function canAccessStory(story: any, email: string): Promise<boolean> {
+  if (story.profileId === email) {
+    return true;
+  }
+  
+  const childProfile = await getChildProfile(email, story.profileId);
+  return childProfile !== null && childProfile.parentEmail === email;
 }
 
 function validateConfig(config: StoryConfig): string | null {
@@ -261,7 +260,8 @@ async function handleGetStory(storyId: string, email: string): Promise<APIRespon
   const story = await getStoryById(storyId);
   if (!story) return response(404, { error: 'Story not found' });
   
-  if (story.profileId !== email) {
+  const hasAccess = await canAccessStory(story, email);
+  if (!hasAccess) {
     return response(403, { error: 'Access denied' });
   }
 
@@ -449,12 +449,21 @@ async function handleContinueStory(email: string, storyId: string, body: string 
     return response(403, { error: 'Story continuation requires an adult profile' });
   }
 
+  // Fetch the story first to check access and get the correct profileId
+  const storyToCheck = await getStoryById(storyId);
+  if (!storyToCheck) return response(404, { error: 'Story not found' });
+  
+  const hasAccess = await canAccessStory(storyToCheck, email);
+  if (!hasAccess) {
+    return response(403, { error: 'Access denied' });
+  }
+
   try {
     const { story } = await initContinueStory({
       storyId,
       choiceId: data.choiceId,
       userEmail: email,
-      profileId: email,
+      profileId: storyToCheck.profileId, // Use the story's actual profileId (could be child UUID or parent email)
       userHint: data.userHint,
     });
 
@@ -499,7 +508,8 @@ async function handleGetStoryCurrent(email: string, storyId: string): Promise<AP
   const story = await getStoryById(storyId);
   if (!story) return response(404, { error: 'Story not found' });
   
-  if (story.profileId !== email) {
+  const hasAccess = await canAccessStory(story, email);
+  if (!hasAccess) {
     return response(403, { error: 'Access denied' });
   }
 
@@ -522,7 +532,8 @@ async function handleGetStoryArchive(email: string, storyId: string): Promise<AP
   const story = await getStoryById(storyId);
   if (!story) return response(404, { error: 'Story not found' });
   
-  if (story.profileId !== email) {
+  const hasAccess = await canAccessStory(story, email);
+  if (!hasAccess) {
     return response(403, { error: 'Access denied' });
   }
 
@@ -555,7 +566,8 @@ async function handleGetStoryChapter(email: string, storyId: string, chapterInde
   const story = await getStoryById(storyId);
   if (!story) return response(404, { error: 'Story not found' });
   
-  if (story.profileId !== email) {
+  const hasAccess = await canAccessStory(story, email);
+  if (!hasAccess) {
     return response(403, { error: 'Access denied' });
   }
 

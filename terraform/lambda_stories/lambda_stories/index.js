@@ -41,6 +41,8 @@ const client_lambda_1 = require("@aws-sdk/client-lambda");
 const constants_1 = require("./constants");
 const repository_1 = require("./repository");
 const storyEngine_1 = require("./storyEngine");
+const utils_1 = require("lambda_shared/utils");
+const profileRepository_1 = require("lambda_shared/profileRepository");
 const lambdaClient = new client_lambda_1.LambdaClient({});
 const VALID_STATUSES = ['in_progress', 'completed', 'abandoned'];
 const MAX_CUSTOM_PROMPT_LENGTH = 500;
@@ -87,18 +89,8 @@ async function invokeAsync(payload) {
         throw error;
     }
 }
-function calculateAge(birthday) {
-    const birthDate = new Date(birthday);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age;
-}
 function isAdultProfile(user) {
-    return !!user.birthday && calculateAge(user.birthday) >= constants_1.ADULT_AGE_THRESHOLD;
+    return !!user.birthday && (0, utils_1.calculateAgeFromBirthday)(user.birthday) >= constants_1.ADULT_AGE_THRESHOLD;
 }
 async function getUserProfile(email) {
     const result = await docClient.send(new lib_dynamodb_1.GetCommand({ TableName: USERS_TABLE, Key: { email } }));
@@ -109,6 +101,13 @@ async function getUserProfile(email) {
         birthday: result.Item.birthday,
         explicitContentAllowed: result.Item.explicitContentAllowed ?? false,
     };
+}
+async function canAccessStory(story, email) {
+    if (story.profileId === email) {
+        return true;
+    }
+    const childProfile = await (0, profileRepository_1.getChildProfile)(email, story.profileId);
+    return childProfile !== null && childProfile.parentEmail === email;
 }
 function validateConfig(config) {
     if (!config)
@@ -222,7 +221,8 @@ async function handleGetStory(storyId, email) {
     const story = await (0, repository_1.getStoryById)(storyId);
     if (!story)
         return response(404, { error: 'Story not found' });
-    if (story.profileId !== email) {
+    const hasAccess = await canAccessStory(story, email);
+    if (!hasAccess) {
         return response(403, { error: 'Access denied' });
     }
     return response(200, {
@@ -394,12 +394,20 @@ async function handleContinueStory(email, storyId, body) {
     if (!isAdultProfile(user)) {
         return response(403, { error: 'Story continuation requires an adult profile' });
     }
+    // Fetch the story first to check access and get the correct profileId
+    const storyToCheck = await (0, repository_1.getStoryById)(storyId);
+    if (!storyToCheck)
+        return response(404, { error: 'Story not found' });
+    const hasAccess = await canAccessStory(storyToCheck, email);
+    if (!hasAccess) {
+        return response(403, { error: 'Access denied' });
+    }
     try {
         const { story } = await (0, storyEngine_1.initContinueStory)({
             storyId,
             choiceId: data.choiceId,
             userEmail: email,
-            profileId: email,
+            profileId: storyToCheck.profileId, // Use the story's actual profileId (could be child UUID or parent email)
             userHint: data.userHint,
         });
         console.log('[Stories] Continue story initialized', {
@@ -439,7 +447,8 @@ async function handleGetStoryCurrent(email, storyId) {
     const story = await (0, repository_1.getStoryById)(storyId);
     if (!story)
         return response(404, { error: 'Story not found' });
-    if (story.profileId !== email) {
+    const hasAccess = await canAccessStory(story, email);
+    if (!hasAccess) {
         return response(403, { error: 'Access denied' });
     }
     if (story.isArchived) {
@@ -458,7 +467,8 @@ async function handleGetStoryArchive(email, storyId) {
     const story = await (0, repository_1.getStoryById)(storyId);
     if (!story)
         return response(404, { error: 'Story not found' });
-    if (story.profileId !== email) {
+    const hasAccess = await canAccessStory(story, email);
+    if (!hasAccess) {
         return response(403, { error: 'Access denied' });
     }
     if (story.status !== 'completed') {
@@ -486,7 +496,8 @@ async function handleGetStoryChapter(email, storyId, chapterIndex) {
     const story = await (0, repository_1.getStoryById)(storyId);
     if (!story)
         return response(404, { error: 'Story not found' });
-    if (story.profileId !== email) {
+    const hasAccess = await canAccessStory(story, email);
+    if (!hasAccess) {
         return response(403, { error: 'Access denied' });
     }
     if (chapterIndex < 0 || chapterIndex >= story.outline.length) {

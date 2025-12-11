@@ -35,7 +35,8 @@ data "aws_iam_policy_document" "lambda_child_stories_dynamodb" {
       "dynamodb:GetItem"
     ]
     resources = [
-      aws_dynamodb_table.users.arn
+      aws_dynamodb_table.users.arn,
+      aws_dynamodb_table.child_profiles.arn
     ]
   }
 }
@@ -69,6 +70,7 @@ module "lambda_child_stories" {
     STORIES_TABLE               = aws_dynamodb_table.stories.name
     STORY_NODES_TABLE           = aws_dynamodb_table.story_nodes.name
     USERS_TABLE                 = aws_dynamodb_table.users.name
+    CHILD_PROFILES_TABLE        = aws_dynamodb_table.child_profiles.name
     CHILD_STORY_HAIKU_MODEL_ID  = var.child_story_haiku_model_id
     CHILD_STORY_SONNET_MODEL_ID = var.child_story_sonnet_model_id
     STORY_ARCHIVE_BUCKET        = module.story_archive_bucket.s3_bucket_id

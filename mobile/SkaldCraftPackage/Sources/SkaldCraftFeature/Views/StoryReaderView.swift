@@ -5,6 +5,7 @@ struct StoryReaderView: View {
     
     @Binding var story: Story?
     @Binding var currentNode: StoryNode?
+    let activeProfile: ActiveProfileType
     let onBack: () -> Void
     let onStartNewStory: () -> Void
     
@@ -671,7 +672,14 @@ struct StoryReaderView: View {
         
         do {
             let request = ContinueStoryRequest(choiceId: choiceId)
-            let initialResponse = try await APIService.continueAdultStory(idToken: idToken, storyId: storyId, request: request)
+            
+            // Use the appropriate endpoint based on profile type
+            let initialResponse: ContinueStoryResponse
+            if case .child = activeProfile {
+                initialResponse = try await APIService.continueChildStory(idToken: idToken, storyId: storyId, request: request)
+            } else {
+                initialResponse = try await APIService.continueAdultStory(idToken: idToken, storyId: storyId, request: request)
+            }
             
             isPolling = true
             let expectedChapter = currentChapterIndex + 1

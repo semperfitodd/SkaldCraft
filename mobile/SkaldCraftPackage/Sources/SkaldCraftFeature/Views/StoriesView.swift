@@ -13,7 +13,13 @@ struct StoriesView: View {
     @State private var error: Error?
     @State private var showNewStorySheet = false
     
-    private var isAdultProfile: Bool {
+    private var canViewStories: Bool {
+        // Child profiles can view stories
+        if case .child = activeProfile {
+            return true
+        }
+        
+        // Adult profiles need to be 18+
         guard activeProfile == .adult,
               let birthday = profile?.profile.birthday else {
             return false
@@ -24,6 +30,20 @@ struct StoriesView: View {
         return age >= 18
     }
     
+    private var isChildProfile: Bool {
+        if case .child = activeProfile {
+            return true
+        }
+        return false
+    }
+    
+    private var currentChildProfile: ChildProfile? {
+        if case .child(let profileId) = activeProfile {
+            return profiles?.children.first(where: { $0.profileId == profileId })
+        }
+        return nil
+    }
+    
     var body: some View {
         ZStack {
             backgroundGradient
@@ -32,7 +52,7 @@ struct StoriesView: View {
         .navigationTitle("Stories")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            if isAdultProfile {
+            if canViewStories {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showNewStorySheet = true
@@ -45,16 +65,28 @@ struct StoriesView: View {
             }
         }
         .sheet(isPresented: $showNewStorySheet) {
-            NewAdultStoryView(
-                profileId: profile?.email ?? "",
-                preferredGenres: profile?.profile.preferredGenres ?? [],
-                onStoryCreated: { story, node in
-                    selectedStory = story
-                    currentNode = node
-                    showNewStorySheet = false
-                }
-            )
-            .environment(authService)
+            if let childProfile = currentChildProfile {
+                NewChildStoryView(
+                    childProfile: childProfile,
+                    onStoryCreated: { story, node in
+                        selectedStory = story
+                        currentNode = node
+                        showNewStorySheet = false
+                    }
+                )
+                .environment(authService)
+            } else {
+                NewAdultStoryView(
+                    profileId: profile?.email ?? "",
+                    preferredGenres: profile?.profile.preferredGenres ?? [],
+                    onStoryCreated: { story, node in
+                        selectedStory = story
+                        currentNode = node
+                        showNewStorySheet = false
+                    }
+                )
+                .environment(authService)
+            }
         }
         .task { await loadStories() }
     }
@@ -70,7 +102,7 @@ struct StoriesView: View {
     
     @ViewBuilder
     private var content: some View {
-        if !isAdultProfile {
+        if !canViewStories {
             restrictedView
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
         } else if isLoading {
@@ -102,12 +134,18 @@ struct StoriesView: View {
                 .foregroundStyle(.orange.opacity(0.6))
                 .shadow(color: Color.orange.opacity(0.3), radius: 10, x: 0, y: 5)
             
-            Text("Stories are currently available only for adult profiles.")
+            Text("Stories are available for adult profiles (18+) and child profiles.")
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
                 .lineSpacing(4)
+            
+            Text("Please select a valid profile with a verified birthdate.")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(.secondary.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -183,7 +221,7 @@ struct StoriesView: View {
     }
     
     private func loadStories() async {
-        guard isAdultProfile, let idToken = authService.idToken else {
+        guard canViewStories, let idToken = authService.idToken else {
             isLoading = false
             return
         }
@@ -192,7 +230,15 @@ struct StoriesView: View {
         error = nil
         
         do {
-            stories = try await APIService.fetchStories(idToken: idToken, profileId: profile?.email)
+            // Determine the correct profile ID based on active profile type
+            let profileId: String?
+            if case .child(let childProfileId) = activeProfile {
+                profileId = childProfileId
+            } else {
+                profileId = profile?.email
+            }
+            
+            stories = try await APIService.fetchStories(idToken: idToken, profileId: profileId)
         } catch {
             self.error = error
         }
