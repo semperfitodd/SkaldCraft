@@ -4,7 +4,7 @@
   "description": "SkaldCraft Stories API Lambda - Story and StoryNode CRUD operations with AI generation",
   "main": "index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc && if [ -d lambda_stories ]; then mv lambda_stories/*.js . && rmdir lambda_stories; fi"
   },
   "keywords": [
     "lambda",

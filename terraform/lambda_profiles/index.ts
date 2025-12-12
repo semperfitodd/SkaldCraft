@@ -380,8 +380,7 @@ export const handler = async (event: APIGatewayEvent): Promise<APIResponse> => {
     }
 
     if (path === '/profiles' && method === 'GET') {
-      const user = await getUser(email);
-      if (!user) return response(404, { error: 'User not found' });
+      const user = await getOrCreateUser(email, cognitoSub, givenName, familyName);
       const children = await getChildProfiles(email);
       return response(200, {
         parent: {

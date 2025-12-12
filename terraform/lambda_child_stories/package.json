@@ -4,7 +4,7 @@
   "description": "SkaldCraft Child Stories API Lambda - Child-specific story generation with age-appropriate content",
   "main": "index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc && if [ -d lambda_child_stories ]; then mv lambda_child_stories/*.js . && rmdir lambda_child_stories; fi"
   },
   "keywords": [
     "lambda",
