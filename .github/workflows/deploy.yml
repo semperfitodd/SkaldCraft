@@ -93,6 +93,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Create builds directory
+        run: mkdir -p terraform/builds
+
       - name: Build lambda_shared layer
         working-directory: terraform/lambda_shared
         run: |
