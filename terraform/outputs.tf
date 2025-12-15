@@ -27,3 +27,13 @@ output "oauth_secrets_arn" {
   description = "ARN of the OAuth credentials secret in Secrets Manager"
   value       = aws_secretsmanager_secret.oauth_credentials.arn
 }
+
+output "static_site_bucket" {
+  description = "S3 bucket name for static site deployment"
+  value       = module.site_s3_bucket.s3_bucket_id
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID for cache invalidation"
+  value       = module.cdn.cloudfront_distribution_id
+}

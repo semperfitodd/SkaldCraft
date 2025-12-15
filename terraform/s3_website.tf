@@ -15,24 +15,6 @@ data "aws_iam_policy_document" "site" {
   }
 }
 
-locals {
-  mime_types = {
-    "css"  = "text/css"
-    "html" = "text/html"
-    "ico"  = "image/ico"
-    "jpg"  = "image/jpeg"
-    "js"   = "application/javascript"
-    "json" = "application/json"
-    "map"  = "application/octet-stream"
-    "png"  = "image/png"
-    "svg"  = "image/svg+xml"
-    "txt"  = "text/plain"
-    "xml"  = "application/xml"
-  }
-
-  static_html_directory = "../static_site/build/"
-}
-
 module "site_s3_bucket" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "~> 5.0"
@@ -60,18 +42,6 @@ module "site_s3_bucket" {
       }
     }
   }
-
-  tags = var.tags
-}
-
-resource "aws_s3_object" "website_object" {
-  for_each = fileset(local.static_html_directory, "**/*")
-
-  bucket       = module.site_s3_bucket.s3_bucket_id
-  key          = each.value
-  source       = "${local.static_html_directory}/${each.value}"
-  etag         = filemd5("${local.static_html_directory}/${each.value}")
-  content_type = lookup(local.mime_types, split(".", each.value)[length(split(".", each.value)) - 1])
 
   tags = var.tags
 }
