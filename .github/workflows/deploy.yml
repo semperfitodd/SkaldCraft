@@ -98,31 +98,41 @@ jobs:
         run: |
           npm install
           npm run build
-          mkdir -p nodejs/node_modules
+          mkdir -p nodejs/node_modules/lambda_shared
+          # Copy built JS files to layer
+          cp *.js nodejs/node_modules/lambda_shared/
+          cp package.json nodejs/node_modules/lambda_shared/
+          # Copy dependencies to layer
           cp -r node_modules/* nodejs/node_modules/
-          cp *.js nodejs/node_modules/
-          zip -r ../../builds/lambda_shared_layer.zip nodejs
+          cd nodejs
+          zip -r ../../../builds/lambda_shared_layer.zip .
 
       - name: Build lambda_stories
         working-directory: terraform/lambda_stories
         run: |
-          npm install
+          # Install dependencies (excluding lambda_shared since it's in the layer)
+          npm install --omit=optional
           npm run build
-          zip -r ../../builds/lambda_stories.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
+          # Package only the function code (dependencies are in layer)
+          zip -r ../../builds/lambda_stories.zip *.js package.json -x "*.ts" -x "tsconfig.json" -x "node_modules/*"
 
       - name: Build lambda_child_stories
         working-directory: terraform/lambda_child_stories
         run: |
-          npm install
+          # Install dependencies (excluding lambda_shared since it's in the layer)
+          npm install --omit=optional
           npm run build
-          zip -r ../../builds/lambda_child_stories.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
+          # Package only the function code (dependencies are in layer)
+          zip -r ../../builds/lambda_child_stories.zip *.js package.json -x "*.ts" -x "tsconfig.json" -x "node_modules/*"
 
       - name: Build lambda_profiles
         working-directory: terraform/lambda_profiles
         run: |
-          npm install
+          # Install dependencies (excluding lambda_shared since it's in the layer)
+          npm install --omit=optional
           npm run build
-          zip -r ../../builds/lambda_profiles.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
+          # Package only the function code (dependencies are in layer)
+          zip -r ../../builds/lambda_profiles.zip *.js package.json -x "*.ts" -x "tsconfig.json" -x "node_modules/*"
 
       - name: Upload Lambda artifacts
         uses: actions/upload-artifact@v4
