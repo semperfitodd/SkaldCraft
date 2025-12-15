@@ -15,7 +15,7 @@ locals {
 }
 
 resource "aws_cognito_user_pool" "main" {
-  name = "${var.project}_${var.app_name}"
+  name = var.project
 
   mfa_configuration        = "OFF"
   auto_verified_attributes = ["email"]
@@ -91,7 +91,7 @@ resource "aws_cognito_identity_provider" "google" {
 }
 
 resource "aws_cognito_user_pool_client" "main" {
-  name         = "${var.project}_${var.app_name}_client"
+  name         = "${var.project}_client"
   user_pool_id = aws_cognito_user_pool.main.id
 
   explicit_auth_flows          = ["ALLOW_REFRESH_TOKEN_AUTH"]

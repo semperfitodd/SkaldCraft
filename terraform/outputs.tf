@@ -37,3 +37,8 @@ output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID for cache invalidation"
   value       = module.cdn.cloudfront_distribution_id
 }
+
+output "github_tfvars_secret_name" {
+  description = "AWS Secrets Manager secret name for GitHub Actions tfvars"
+  value       = aws_secretsmanager_secret.github_tfvars.name
+}

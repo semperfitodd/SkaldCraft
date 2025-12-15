@@ -120,6 +120,24 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Fetch tfvars from AWS Secrets Manager
+        run: |
+          ENV="${{ needs.setup.outputs.environment }}"
+          SECRET_NAME="skaldcraft_app_${ENV}/github-tfvars"
+          
+          echo "Fetching secret: $SECRET_NAME"
+          
+          # Get secret from AWS Secrets Manager
+          SECRET_JSON=$(aws secretsmanager get-secret-value \
+            --secret-id "$SECRET_NAME" \
+            --query SecretString \
+            --output text)
+          
+          # Convert JSON to tfvars format
+          echo "$SECRET_JSON" | jq -r 'to_entries | .[] | "\(.key) = \"\(.value)\""' > ${{ needs.setup.outputs.tfvars-file }}
+          
+          echo "Created ${{ needs.setup.outputs.tfvars-file }}"
+
       - name: Terraform Init
         run: |
           terraform init \
