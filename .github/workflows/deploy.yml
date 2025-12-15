@@ -9,7 +9,7 @@
 #   - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
 #   - TF_STATE_BUCKET, TF_STATE_REGION
 #
-# Required GitHub Environments:
+# GitHub Environments (optional for approval gates):
 #   - dev (no approval required)
 #   - prod (requires manual approval)
 #
@@ -141,7 +141,6 @@ jobs:
     name: Terraform Deploy
     needs: [setup, build-lambdas]
     runs-on: ubuntu-latest
-    environment: ${{ needs.setup.outputs.environment }}
     
     defaults:
       run:
@@ -236,7 +235,6 @@ jobs:
     name: Web Deploy
     needs: [setup, terraform-deploy]
     runs-on: ubuntu-latest
-    environment: ${{ needs.setup.outputs.environment }}
     
     defaults:
       run:
@@ -330,7 +328,6 @@ jobs:
     name: iOS Deploy
     needs: [setup, terraform-deploy]
     runs-on: macos-14
-    environment: ${{ needs.setup.outputs.environment }}
     
     defaults:
       run:
