@@ -96,7 +96,7 @@ jobs:
       - name: Build lambda_shared layer
         working-directory: terraform/lambda_shared
         run: |
-          npm ci
+          npm install
           npm run build
           mkdir -p nodejs/node_modules
           cp -r node_modules/* nodejs/node_modules/
@@ -106,21 +106,21 @@ jobs:
       - name: Build lambda_stories
         working-directory: terraform/lambda_stories
         run: |
-          npm ci
+          npm install
           npm run build
           zip -r ../../builds/lambda_stories.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
 
       - name: Build lambda_child_stories
         working-directory: terraform/lambda_child_stories
         run: |
-          npm ci
+          npm install
           npm run build
           zip -r ../../builds/lambda_child_stories.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
 
       - name: Build lambda_profiles
         working-directory: terraform/lambda_profiles
         run: |
-          npm ci
+          npm install
           npm run build
           zip -r ../../builds/lambda_profiles.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
 
