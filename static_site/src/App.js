@@ -51,11 +51,33 @@ function updateHash(view, storyId = null) {
   }
 }
 
+// Load active profile from localStorage
+function loadActiveProfile() {
+  try {
+    const saved = localStorage.getItem('activeProfile');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (err) {
+    console.error('Failed to load active profile:', err);
+  }
+  return { type: 'adult', profileId: null };
+}
+
+// Save active profile to localStorage
+function saveActiveProfile(activeProfile) {
+  try {
+    localStorage.setItem('activeProfile', JSON.stringify(activeProfile));
+  } catch (err) {
+    console.error('Failed to save active profile:', err);
+  }
+}
+
 function App() {
   const { authenticated, loading: authLoading, error: authError } = useAuth();
   const [profile, setProfile] = useState(null);
   const [profiles, setProfiles] = useState(null);
-  const [activeProfile, setActiveProfile] = useState({ type: 'adult', profileId: null });
+  const [activeProfile, setActiveProfile] = useState(loadActiveProfile);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState(null);
   const [currentView, setCurrentView] = useState(VIEW.HOME);
@@ -73,6 +95,13 @@ function App() {
     }
   }, []);
 
+  // Save active profile to localStorage whenever it changes
+  useEffect(() => {
+    if (authenticated && activeProfile) {
+      saveActiveProfile(activeProfile);
+    }
+  }, [activeProfile, authenticated]);
+
   // Load profile on authentication
   useEffect(() => {
     if (authenticated && !profile) {
@@ -81,6 +110,23 @@ function App() {
         .then(([profileData, profilesData]) => {
           setProfile(profileData);
           setProfiles(profilesData);
+          
+          // Validate saved active profile still exists
+          setActiveProfile(currentActive => {
+            if (currentActive.type === 'child' && currentActive.profileId) {
+              const childExists = profilesData?.children?.some(
+                c => c.profileId === currentActive.profileId
+              );
+              if (!childExists) {
+                // Child profile no longer exists, reset to adult
+                const defaultProfile = { type: 'adult', profileId: null };
+                saveActiveProfile(defaultProfile);
+                return defaultProfile;
+              }
+            }
+            // Return current active profile (already loaded from localStorage)
+            return currentActive;
+          });
           
           // Check hash for initial view
           const { view, storyId } = parseHash();
