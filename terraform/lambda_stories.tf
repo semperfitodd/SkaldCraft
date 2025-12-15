@@ -152,7 +152,8 @@ module "lambda_stories" {
     STORIES_TABLE             = aws_dynamodb_table.stories.name
     STORY_NODES_TABLE         = aws_dynamodb_table.story_nodes.name
     USERS_TABLE               = aws_dynamodb_table.users.name
-    CHILD_PROFILES_TABLE      = aws_dynamodb_table.child_profiles.name
+    CHILD_PROFILES_TABLE      = aws_dynamodb_table.child_profiles.table
+_name
     ADULT_STORY_MODEL_ID      = var.adult_story_model_id
     ADULT_SUMMARIZER_MODEL_ID = var.adult_summarizer_model_id
     STORY_ARCHIVE_BUCKET      = module.story_archive_bucket.s3_bucket_id
@@ -160,17 +161,9 @@ module "lambda_stories" {
     LAMBDA_FUNCTION_NAME      = "${var.project}_stories"
   }
 
-  source_path = [
-    {
-      path             = "${path.module}/lambda_stories"
-      npm_requirements = true
-      commands = [
-        "npm install",
-        "npm run build",
-        ":zip"
-      ]
-    }
-  ]
+  # Use pre-built zip from CI/CD pipeline
+  create_package         = false
+  local_existing_package = "${path.module}/builds/lambda_stories.zip"
 
   layers = [aws_lambda_layer_version.lambda_shared.arn]
 

@@ -77,11 +77,75 @@ jobs:
           echo "Backend key: skaldcraft/${ENV}/terraform.tfstate"
 
   # ============================================================================
+  # BUILD LAMBDA FUNCTIONS
+  # ============================================================================
+  build-lambdas:
+    name: Build Lambda Functions
+    needs: setup
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            terraform/lambda_shared/package-lock.json
+            terraform/lambda_stories/package-lock.json
+            terraform/lambda_child_stories/package-lock.json
+            terraform/lambda_profiles/package-lock.json
+
+      - name: Build lambda_shared layer
+        working-directory: terraform/lambda_shared
+        run: |
+          npm ci
+          npm run build
+          mkdir -p nodejs/node_modules
+          cp -r node_modules/* nodejs/node_modules/
+          cp *.js nodejs/node_modules/
+          zip -r ../../builds/lambda_shared_layer.zip nodejs
+
+      - name: Build lambda_stories
+        working-directory: terraform/lambda_stories
+        run: |
+          npm ci
+          npm run build
+          zip -r ../../builds/lambda_stories.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
+
+      - name: Build lambda_child_stories
+        working-directory: terraform/lambda_child_stories
+        run: |
+          npm ci
+          npm run build
+          zip -r ../../builds/lambda_child_stories.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
+
+      - name: Build lambda_profiles
+        working-directory: terraform/lambda_profiles
+        run: |
+          npm ci
+          npm run build
+          zip -r ../../builds/lambda_profiles.zip . -x "*.ts" -x "node_modules/*" -x "tsconfig.json"
+
+      - name: Upload Lambda artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-builds-${{ needs.setup.outputs.environment }}
+          path: terraform/builds/*.zip
+          retention-days: 90
+          # Set to private if repo is public and contains sensitive code
+          # This requires GitHub Enterprise or Team plan
+          # For public repos on free plan, consider encrypting zips or using S3
+
+  # ============================================================================
   # TERRAFORM DEPLOY
   # ============================================================================
   terraform-deploy:
     name: Terraform Deploy
-    needs: setup
+    needs: [setup, build-lambdas]
     runs-on: ubuntu-latest
     environment: ${{ needs.setup.outputs.environment }}
     
@@ -96,6 +160,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download Lambda artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-builds-${{ needs.setup.outputs.environment }}
+          path: terraform/builds
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

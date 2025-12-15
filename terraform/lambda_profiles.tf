@@ -46,17 +46,9 @@ module "lambda_profiles" {
     CHILD_PROFILES_TABLE = aws_dynamodb_table.child_profiles.name
   }
 
-  source_path = [
-    {
-      path             = "${path.module}/lambda_profiles"
-      npm_requirements = true
-      commands = [
-        "npm install",
-        "npm run build",
-        ":zip"
-      ]
-    }
-  ]
+  # Use pre-built zip from CI/CD pipeline
+  create_package         = false
+  local_existing_package = "${path.module}/builds/lambda_profiles.zip"
 
   layers = [aws_lambda_layer_version.lambda_shared.arn]
 

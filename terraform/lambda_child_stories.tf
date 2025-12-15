@@ -78,17 +78,9 @@ module "lambda_child_stories" {
     LAMBDA_FUNCTION_NAME        = "${var.project}_child_stories"
   }
 
-  source_path = [
-    {
-      path             = "${path.module}/lambda_child_stories"
-      npm_requirements = true
-      commands = [
-        "npm install",
-        "npm run build",
-        ":zip"
-      ]
-    }
-  ]
+  # Use pre-built zip from CI/CD pipeline
+  create_package         = false
+  local_existing_package = "${path.module}/builds/lambda_child_stories.zip"
 
   layers = [aws_lambda_layer_version.lambda_shared.arn]
 
