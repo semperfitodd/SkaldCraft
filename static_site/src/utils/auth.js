@@ -62,6 +62,8 @@ export function getTokens() {
 
 export function clearTokens() {
   TOKEN_KEYS.forEach((key) => localStorage.removeItem(key));
+  // Also clear the active profile on logout
+  localStorage.removeItem('activeProfile');
 }
 
 export function decodeToken(token) {
