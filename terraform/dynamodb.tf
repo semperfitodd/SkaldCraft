@@ -1,5 +1,5 @@
 resource "aws_dynamodb_table" "child_profiles" {
-  name         = "${var.environment}_child_profiles"
+  name         = "${var.project}_child_profiles"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "parentEmail"
   range_key    = "profileId"
@@ -19,12 +19,12 @@ resource "aws_dynamodb_table" "child_profiles" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.environment}_child_profiles"
+    Name = "${var.project}_child_profiles"
   })
 }
 
 resource "aws_dynamodb_table" "stories" {
-  name         = "${var.environment}_stories"
+  name         = "${var.project}_stories"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "storyId"
 
@@ -59,12 +59,12 @@ resource "aws_dynamodb_table" "stories" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.environment}_stories"
+    Name = "${var.project}_stories"
   })
 }
 
 resource "aws_dynamodb_table" "story_nodes" {
-  name         = "${var.environment}_story_nodes"
+  name         = "${var.project}_story_nodes"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "storyId"
   range_key    = "nodeId"
@@ -84,12 +84,12 @@ resource "aws_dynamodb_table" "story_nodes" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.environment}_story_nodes"
+    Name = "${var.project}_story_nodes"
   })
 }
 
 resource "aws_dynamodb_table" "users" {
-  name         = "${var.environment}_users"
+  name         = "${var.project}_users"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "email"
 
@@ -103,6 +103,6 @@ resource "aws_dynamodb_table" "users" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.environment}_users"
+    Name = "${var.project}_users"
   })
 }

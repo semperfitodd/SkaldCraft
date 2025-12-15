@@ -2,8 +2,8 @@ module "api_gateway" {
   source  = "terraform-aws-modules/apigateway-v2/aws"
   version = "~> 6.0"
 
-  name          = var.environment
-  description   = "HTTP API Gateway for ${var.environment}"
+  name          = var.project
+  description   = "HTTP API Gateway for ${var.project}"
   protocol_type = "HTTP"
 
   cors_configuration = {

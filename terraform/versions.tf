@@ -22,10 +22,10 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = var.app_name
-      Owner       = "Todd"
-      Provisioner = "Terraform"
       Environment = var.environment
+      Owner       = "Todd"
+      Project     = var.app_name
+      Provisioner = "Terraform"
     }
   }
 }

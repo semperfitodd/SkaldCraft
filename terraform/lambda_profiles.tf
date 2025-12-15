@@ -33,7 +33,7 @@ module "lambda_profiles" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
-  function_name = "${var.environment}_profiles"
+  function_name = "${var.project}_profiles"
   description   = "User and child profile management"
   handler       = "index.handler"
   publish       = true
@@ -41,7 +41,7 @@ module "lambda_profiles" {
   timeout       = 30
 
   environment_variables = {
-    ENVIRONMENT          = var.environment
+    ENVIRONMENT          = var.project
     USERS_TABLE          = aws_dynamodb_table.users.name
     CHILD_PROFILES_TABLE = aws_dynamodb_table.child_profiles.name
   }
@@ -80,7 +80,7 @@ module "lambda_profiles" {
 }
 
 resource "aws_iam_policy" "lambda_profiles_dynamodb" {
-  name        = "${var.environment}_lambda_profiles_dynamodb"
+  name        = "${var.project}_lambda_profiles_dynamodb"
   description = "Allow Profiles Lambda to access Users and ChildProfiles tables"
   policy      = data.aws_iam_policy_document.lambda_profiles_dynamodb.json
 

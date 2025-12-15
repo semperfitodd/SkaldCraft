@@ -1,0 +1,427 @@
+# =============================================================================
+# DEPLOYMENT WORKFLOW
+# =============================================================================
+# Branch mapping:
+#   - dev branch  => development environment
+#   - main branch => production environment
+#
+# Required GitHub Secrets:
+#   - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+#   - TF_STATE_BUCKET, TF_STATE_REGION
+#   - (Optional) TF_STATE_DDB_TABLE
+#   - (Optional) DEV_WEB_S3_BUCKET, DEV_CLOUDFRONT_DISTRIBUTION_ID
+#   - (Optional) PROD_WEB_S3_BUCKET, PROD_CLOUDFRONT_DISTRIBUTION_ID
+#
+# Required GitHub Environments:
+#   - development (no approval required)
+#   - production (requires manual approval)
+#
+# Terraform:
+#   - Separate state files: skaldcraft/dev/terraform.tfstate & skaldcraft/prod/terraform.tfstate
+#   - Uses dev.tfvars for dev, prod.tfvars for prod
+# =============================================================================
+
+name: Deploy
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+# Ensure only one deployment per environment runs at a time
+concurrency:
+  group: deploy-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  # ============================================================================
+  # SETUP - Determine environment and validate
+  # ============================================================================
+  setup:
+    name: Setup Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      gh-environment: ${{ steps.set-env.outputs.gh-environment }}
+      tfvars-file: ${{ steps.set-env.outputs.tfvars-file }}
+      backend-key: ${{ steps.set-env.outputs.backend-key }}
+    
+    steps:
+      - name: Determine environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref_name }}" == "main" ]; then
+            ENV="prod"
+          elif [ "${{ github.ref_name }}" == "dev" ]; then
+            ENV="dev"
+          else
+            echo "Unknown branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+          
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          
+          # Map to GitHub Environment names and backend key
+          if [ "$ENV" == "prod" ]; then
+            echo "gh-environment=production" >> $GITHUB_OUTPUT
+            echo "tfvars-file=prod.tfvars" >> $GITHUB_OUTPUT
+            echo "backend-key=skaldcraft/prod/terraform.tfstate" >> $GITHUB_OUTPUT
+          else
+            echo "gh-environment=development" >> $GITHUB_OUTPUT
+            echo "tfvars-file=dev.tfvars" >> $GITHUB_OUTPUT
+            echo "backend-key=skaldcraft/dev/terraform.tfstate" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "Deploying to: $ENV"
+          echo "Using tfvars: ${ENV}.tfvars"
+          echo "Backend key: skaldcraft/${ENV}/terraform.tfstate"
+
+  # ============================================================================
+  # TERRAFORM DEPLOY
+  # ============================================================================
+  terraform-deploy:
+    name: Terraform Deploy
+    needs: setup
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.gh-environment }}
+    
+    defaults:
+      run:
+        working-directory: terraform
+    
+    outputs:
+      web-bucket: ${{ steps.outputs.outputs.web-bucket }}
+      cloudfront-id: ${{ steps.outputs.outputs.cloudfront-id }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ~1.9.0
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ secrets.TF_STATE_REGION }}" \
+            -backend-config="key=${{ needs.setup.outputs.backend-key }}"
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan \
+            -var-file="${{ needs.setup.outputs.tfvars-file }}" \
+            -out=tfplan \
+            -no-color
+        env:
+          TF_VAR_environment: ${{ needs.setup.outputs.environment }}
+          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+
+      - name: Terraform Apply
+        id: apply
+        run: terraform apply -auto-approve tfplan
+        env:
+          TF_VAR_environment: ${{ needs.setup.outputs.environment }}
+          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+
+      - name: Extract Terraform Outputs
+        id: outputs
+        run: |
+          # Extract web bucket and CloudFront distribution ID from outputs
+          WEB_BUCKET=$(terraform output -raw website_bucket_name 2>/dev/null || echo "")
+          CF_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
+          
+          echo "web-bucket=$WEB_BUCKET" >> $GITHUB_OUTPUT
+          echo "cloudfront-id=$CF_ID" >> $GITHUB_OUTPUT
+          
+          echo "Web Bucket: $WEB_BUCKET"
+          echo "CloudFront ID: $CF_ID"
+
+  # ============================================================================
+  # WEB DEPLOY
+  # ============================================================================
+  web-deploy:
+    name: Web Deploy
+    needs: [setup, terraform-deploy]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.gh-environment }}
+    
+    defaults:
+      run:
+        working-directory: static_site
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: static_site/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+        env:
+          CI: true
+          REACT_APP_ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+          # Add any other environment-specific build variables here
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Determine S3 bucket and CloudFront ID
+        id: config
+        run: |
+          ENV="${{ needs.setup.outputs.environment }}"
+          
+          if [ "$ENV" == "prod" ]; then
+            # Use Terraform outputs if available, otherwise fall back to secrets
+            S3_BUCKET="${{ needs.terraform-deploy.outputs.web-bucket }}"
+            CF_ID="${{ needs.terraform-deploy.outputs.cloudfront-id }}"
+            
+            if [ -z "$S3_BUCKET" ]; then
+              S3_BUCKET="${{ secrets.PROD_WEB_S3_BUCKET }}"
+            fi
+            if [ -z "$CF_ID" ]; then
+              CF_ID="${{ secrets.PROD_CLOUDFRONT_DISTRIBUTION_ID }}"
+            fi
+          else
+            S3_BUCKET="${{ needs.terraform-deploy.outputs.web-bucket }}"
+            CF_ID="${{ needs.terraform-deploy.outputs.cloudfront-id }}"
+            
+            if [ -z "$S3_BUCKET" ]; then
+              S3_BUCKET="${{ secrets.DEV_WEB_S3_BUCKET }}"
+            fi
+            if [ -z "$CF_ID" ]; then
+              CF_ID="${{ secrets.DEV_CLOUDFRONT_DISTRIBUTION_ID }}"
+            fi
+          fi
+          
+          echo "s3-bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+          echo "cloudfront-id=$CF_ID" >> $GITHUB_OUTPUT
+          
+          echo "Deploying to S3 bucket: $S3_BUCKET"
+          echo "CloudFront distribution: $CF_ID"
+
+      - name: Detect build directory
+        id: build-dir
+        run: |
+          if [ -d "build" ]; then
+            echo "dir=build" >> $GITHUB_OUTPUT
+          elif [ -d "dist" ]; then
+            echo "dir=dist" >> $GITHUB_OUTPUT
+          else
+            echo "No build directory found!"
+            exit 1
+          fi
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync ${{ steps.build-dir.outputs.dir }}/ s3://${{ steps.config.outputs.s3-bucket }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html" \
+            --exclude "manifest.json" \
+            --exclude "robots.txt"
+          
+          # Upload HTML files with shorter cache
+          aws s3 sync ${{ steps.build-dir.outputs.dir }}/ s3://${{ steps.config.outputs.s3-bucket }}/ \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --exclude "*" \
+            --include "*.html" \
+            --include "manifest.json" \
+            --include "robots.txt"
+
+      - name: Invalidate CloudFront cache
+        if: steps.config.outputs.cloudfront-id != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.config.outputs.cloudfront-id }} \
+            --paths "/*"
+
+      - name: Upload deployment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-deployment-${{ needs.setup.outputs.environment }}
+          path: static_site/${{ steps.build-dir.outputs.dir }}/
+          retention-days: 30
+
+  # ============================================================================
+  # iOS DEPLOY
+  # ============================================================================
+  ios-deploy:
+    name: iOS Deploy
+    needs: [setup, terraform-deploy]
+    runs-on: macos-14
+    environment: ${{ needs.setup.outputs.gh-environment }}
+    
+    defaults:
+      run:
+        working-directory: mobile
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Cache Swift Package Manager
+        uses: actions/cache@v4
+        with:
+          path: |
+            mobile/SkaldCraft.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+            mobile/SkaldCraft.xcworkspace/xcshareddata/swiftpm
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Detect project structure
+        id: detect
+        run: |
+          if [ -f "SkaldCraft.xcworkspace/contents.xcworkspacedata" ]; then
+            echo "use_workspace=true" >> $GITHUB_OUTPUT
+            echo "project_file=SkaldCraft.xcworkspace" >> $GITHUB_OUTPUT
+          elif [ -f "SkaldCraft.xcodeproj/project.pbxproj" ]; then
+            echo "use_workspace=false" >> $GITHUB_OUTPUT
+            echo "project_file=SkaldCraft.xcodeproj" >> $GITHUB_OUTPUT
+          else
+            echo "No Xcode project or workspace found!"
+            exit 1
+          fi
+
+      - name: Set build configuration
+        id: config
+        run: |
+          if [ "${{ needs.setup.outputs.environment }}" == "prod" ]; then
+            echo "configuration=Release" >> $GITHUB_OUTPUT
+          else
+            echo "configuration=Debug" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build for simulator (no signing)
+        run: |
+          BUILD_DIR="build/${{ needs.setup.outputs.environment }}"
+          mkdir -p "$BUILD_DIR"
+          
+          if [ "${{ steps.detect.outputs.use_workspace }}" == "true" ]; then
+            xcodebuild clean build \
+              -workspace ${{ steps.detect.outputs.project_file }} \
+              -scheme SkaldCraft \
+              -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
+              -configuration ${{ steps.config.outputs.configuration }} \
+              -derivedDataPath "$BUILD_DIR/DerivedData" \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              | tee "$BUILD_DIR/build.log" | xcpretty
+          else
+            xcodebuild clean build \
+              -project ${{ steps.detect.outputs.project_file }} \
+              -scheme SkaldCraft \
+              -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
+              -configuration ${{ steps.config.outputs.configuration }} \
+              -derivedDataPath "$BUILD_DIR/DerivedData" \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              | tee "$BUILD_DIR/build.log" | xcpretty
+          fi
+
+      # TODO: For production builds with signing configured, use the following:
+      # - Import signing certificates and provisioning profiles
+      # - Build archive with xcodebuild archive
+      # - Export IPA with xcodebuild -exportArchive
+      # - Upload to TestFlight or internal distribution
+      
+      - name: Create build info
+        run: |
+          BUILD_DIR="build/${{ needs.setup.outputs.environment }}"
+          cat > "$BUILD_DIR/build-info.json" <<EOF
+          {
+            "environment": "${{ needs.setup.outputs.environment }}",
+            "branch": "${{ github.ref_name }}",
+            "commit": "${{ github.sha }}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "configuration": "${{ steps.config.outputs.configuration }}",
+            "xcode_version": "$(xcodebuild -version | head -n 1)"
+          }
+          EOF
+
+      - name: Upload iOS build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-${{ needs.setup.outputs.environment }}
+          path: |
+            mobile/build/${{ needs.setup.outputs.environment }}/build.log
+            mobile/build/${{ needs.setup.outputs.environment }}/build-info.json
+            mobile/build/${{ needs.setup.outputs.environment }}/DerivedData/Build/Products/**/*.app
+          retention-days: 30
+
+  # ============================================================================
+  # DEPLOYMENT SUMMARY
+  # ============================================================================
+  summary:
+    name: Deployment Summary
+    needs: [setup, terraform-deploy, web-deploy, ios-deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.setup.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Job Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Terraform: ${{ needs.terraform-deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Web Deploy: ${{ needs.web-deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- iOS Deploy: ${{ needs.ios-deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.terraform-deploy.outputs.web-bucket }}" != "" ]; then
+            echo "**Web Bucket:** ${{ needs.terraform-deploy.outputs.web-bucket }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.terraform-deploy.outputs.cloudfront-id }}" != "" ]; then
+            echo "**CloudFront ID:** ${{ needs.terraform-deploy.outputs.cloudfront-id }}" >> $GITHUB_STEP_SUMMARY
+          fi
+

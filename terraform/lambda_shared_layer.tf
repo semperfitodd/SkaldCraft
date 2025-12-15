@@ -5,7 +5,7 @@ resource "null_resource" "lambda_shared_layer_build" {
   }
 
   provisioner "local-exec" {
-    working_dir = "${path.module}"
+    working_dir = path.module
     command     = <<-EOT
       set -e
       cd lambda_shared
@@ -24,7 +24,7 @@ resource "null_resource" "lambda_shared_layer_build" {
 }
 
 resource "aws_lambda_layer_version" "lambda_shared" {
-  layer_name          = "${var.environment}_lambda_shared"
+  layer_name          = "${var.project}_lambda_shared"
   description         = "Shared code for all SkaldCraft Lambda functions"
   compatible_runtimes = ["nodejs20.x"]
   filename            = "${path.module}/.terraform/lambda_shared_layer.zip"

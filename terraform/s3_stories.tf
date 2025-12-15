@@ -2,7 +2,7 @@ module "story_archive_bucket" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "~> 5.0"
 
-  bucket = "${local.environment}-story-archive-${random_string.this.result}"
+  bucket = "${local.project}-story-archive-${random_string.this.result}"
 
   block_public_acls       = true
   block_public_policy     = true
@@ -52,7 +52,7 @@ module "story_archive_bucket" {
 }
 
 resource "aws_iam_policy" "lambda_stories_s3" {
-  name        = "${var.environment}_lambda_stories_s3"
+  name        = "${var.project}_lambda_stories_s3"
   description = "Allow Stories Lambda to read/write story archives to S3"
 
   policy = jsonencode({

@@ -14,7 +14,7 @@ locals {
 }
 
 resource "aws_secretsmanager_secret" "oauth_credentials" {
-  name        = "${var.environment}/oauth-credentials"
+  name        = "${var.project}/oauth-credentials"
   description = "OAuth provider credentials for Apple and Google Sign In"
 
   tags = var.tags

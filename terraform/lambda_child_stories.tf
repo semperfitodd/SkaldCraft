@@ -48,7 +48,7 @@ data "aws_iam_policy_document" "lambda_child_stories_invoke_self" {
       "lambda:InvokeFunction"
     ]
     resources = [
-      "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${var.environment}_child_stories"
+      "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${var.project}_child_stories"
     ]
   }
 }
@@ -57,7 +57,7 @@ module "lambda_child_stories" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
-  function_name = "${var.environment}_child_stories"
+  function_name = "${var.project}_child_stories"
   description   = "Child story generation with age-appropriate content"
   handler       = "index.handler"
   publish       = true
@@ -66,7 +66,7 @@ module "lambda_child_stories" {
   memory_size   = 512
 
   environment_variables = {
-    ENVIRONMENT                 = var.environment
+    ENVIRONMENT                 = var.project
     STORIES_TABLE               = aws_dynamodb_table.stories.name
     STORY_NODES_TABLE           = aws_dynamodb_table.story_nodes.name
     USERS_TABLE                 = aws_dynamodb_table.users.name
@@ -75,7 +75,7 @@ module "lambda_child_stories" {
     CHILD_STORY_SONNET_MODEL_ID = var.child_story_sonnet_model_id
     STORY_ARCHIVE_BUCKET        = module.story_archive_bucket.s3_bucket_id
     STORY_ARCHIVE_PREFIX        = "stories/"
-    LAMBDA_FUNCTION_NAME        = "${var.environment}_child_stories"
+    LAMBDA_FUNCTION_NAME        = "${var.project}_child_stories"
   }
 
   source_path = [
@@ -115,7 +115,7 @@ module "lambda_child_stories" {
 }
 
 resource "aws_iam_policy" "lambda_child_stories_bedrock" {
-  name        = "${var.environment}_lambda_child_stories_bedrock"
+  name        = "${var.project}_lambda_child_stories_bedrock"
   description = "Allow Child Stories Lambda to invoke Haiku and Sonnet models"
   policy      = data.aws_iam_policy_document.lambda_child_stories_bedrock.json
 
@@ -123,7 +123,7 @@ resource "aws_iam_policy" "lambda_child_stories_bedrock" {
 }
 
 resource "aws_iam_policy" "lambda_child_stories_dynamodb" {
-  name        = "${var.environment}_lambda_child_stories_dynamodb"
+  name        = "${var.project}_lambda_child_stories_dynamodb"
   description = "Allow Child Stories Lambda to access Stories and StoryNodes tables"
   policy      = data.aws_iam_policy_document.lambda_child_stories_dynamodb.json
 
@@ -131,7 +131,7 @@ resource "aws_iam_policy" "lambda_child_stories_dynamodb" {
 }
 
 resource "aws_iam_policy" "lambda_child_stories_invoke_self" {
-  name        = "${var.environment}_lambda_child_stories_invoke_self"
+  name        = "${var.project}_lambda_child_stories_invoke_self"
   description = "Allow Child Stories Lambda to invoke itself asynchronously"
   policy      = data.aws_iam_policy_document.lambda_child_stories_invoke_self.json
 

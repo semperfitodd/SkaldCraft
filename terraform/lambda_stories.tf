@@ -83,7 +83,7 @@ data "aws_iam_policy_document" "lambda_stories_invoke_self" {
       "lambda:InvokeFunction"
     ]
     resources = [
-      "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${var.environment}_stories"
+      "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${var.project}_stories"
     ]
   }
 }
@@ -92,7 +92,7 @@ module "lambda_archive_stream" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
-  function_name = "${var.environment}_archive_stream"
+  function_name = "${var.project}_archive_stream"
   description   = "DynamoDB Stream handler for archiving completed stories"
   handler       = "archiveStreamHandler.handler"
   publish       = true
@@ -101,7 +101,7 @@ module "lambda_archive_stream" {
   memory_size   = 256
 
   environment_variables = {
-    ENVIRONMENT          = var.environment
+    ENVIRONMENT          = var.project
     STORIES_TABLE        = aws_dynamodb_table.stories.name
     STORY_NODES_TABLE    = aws_dynamodb_table.story_nodes.name
     STORY_ARCHIVE_BUCKET = module.story_archive_bucket.s3_bucket_id
@@ -139,7 +139,7 @@ module "lambda_stories" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
-  function_name = "${var.environment}_stories"
+  function_name = "${var.project}_stories"
   description   = "Story and story node management with AI generation"
   handler       = "index.handler"
   publish       = true
@@ -148,7 +148,7 @@ module "lambda_stories" {
   memory_size   = 512
 
   environment_variables = {
-    ENVIRONMENT               = var.environment
+    ENVIRONMENT               = var.project
     STORIES_TABLE             = aws_dynamodb_table.stories.name
     STORY_NODES_TABLE         = aws_dynamodb_table.story_nodes.name
     USERS_TABLE               = aws_dynamodb_table.users.name
@@ -157,7 +157,7 @@ module "lambda_stories" {
     ADULT_SUMMARIZER_MODEL_ID = var.adult_summarizer_model_id
     STORY_ARCHIVE_BUCKET      = module.story_archive_bucket.s3_bucket_id
     STORY_ARCHIVE_PREFIX      = "stories/"
-    LAMBDA_FUNCTION_NAME      = "${var.environment}_stories"
+    LAMBDA_FUNCTION_NAME      = "${var.project}_stories"
   }
 
   source_path = [
@@ -197,7 +197,7 @@ module "lambda_stories" {
 }
 
 resource "aws_iam_policy" "lambda_archive_stream_dynamodb" {
-  name        = "${var.environment}_lambda_archive_stream_dynamodb"
+  name        = "${var.project}_lambda_archive_stream_dynamodb"
   description = "Allow Archive Stream Lambda to read/write Stories and StoryNodes tables"
   policy      = data.aws_iam_policy_document.lambda_archive_stream_dynamodb.json
 
@@ -206,7 +206,7 @@ resource "aws_iam_policy" "lambda_archive_stream_dynamodb" {
 
 # Event source mapping for DynamoDB Stream
 resource "aws_iam_policy" "lambda_stories_bedrock" {
-  name        = "${var.environment}_lambda_stories_bedrock"
+  name        = "${var.project}_lambda_stories_bedrock"
   description = "Allow Stories Lambda to invoke Bedrock models for story generation"
   policy      = data.aws_iam_policy_document.lambda_stories_bedrock.json
 
@@ -214,7 +214,7 @@ resource "aws_iam_policy" "lambda_stories_bedrock" {
 }
 
 resource "aws_iam_policy" "lambda_stories_dynamodb" {
-  name        = "${var.environment}_lambda_stories_dynamodb"
+  name        = "${var.project}_lambda_stories_dynamodb"
   description = "Allow Stories Lambda to access Stories and StoryNodes tables"
   policy      = data.aws_iam_policy_document.lambda_stories_dynamodb.json
 
@@ -222,7 +222,7 @@ resource "aws_iam_policy" "lambda_stories_dynamodb" {
 }
 
 resource "aws_iam_policy" "lambda_stories_invoke_self" {
-  name        = "${var.environment}_lambda_stories_invoke_self"
+  name        = "${var.project}_lambda_stories_invoke_self"
   description = "Allow Stories Lambda to invoke itself asynchronously for background generation"
   policy      = data.aws_iam_policy_document.lambda_stories_invoke_self.json
 
