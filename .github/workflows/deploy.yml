@@ -10,8 +10,8 @@
 #   - TF_STATE_BUCKET, TF_STATE_REGION
 #
 # Required GitHub Environments:
-#   - development (no approval required)
-#   - production (requires manual approval)
+#   - dev (no approval required)
+#   - prod (requires manual approval)
 #
 # Terraform:
 #   - Separate state files: skaldcraft/dev/terraform.tfstate & skaldcraft/prod/terraform.tfstate
@@ -50,7 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
-      gh-environment: ${{ steps.set-env.outputs.gh-environment }}
       tfvars-file: ${{ steps.set-env.outputs.tfvars-file }}
       backend-key: ${{ steps.set-env.outputs.backend-key }}
     
@@ -70,17 +69,8 @@ jobs:
           fi
           
           echo "environment=$ENV" >> $GITHUB_OUTPUT
-          
-          # Map to GitHub Environment names and backend key
-          if [ "$ENV" == "prod" ]; then
-            echo "gh-environment=production" >> $GITHUB_OUTPUT
-            echo "tfvars-file=prod.tfvars" >> $GITHUB_OUTPUT
-            echo "backend-key=skaldcraft/prod/terraform.tfstate" >> $GITHUB_OUTPUT
-          else
-            echo "gh-environment=development" >> $GITHUB_OUTPUT
-            echo "tfvars-file=dev.tfvars" >> $GITHUB_OUTPUT
-            echo "backend-key=skaldcraft/dev/terraform.tfstate" >> $GITHUB_OUTPUT
-          fi
+          echo "tfvars-file=${ENV}.tfvars" >> $GITHUB_OUTPUT
+          echo "backend-key=skaldcraft/${ENV}/terraform.tfstate" >> $GITHUB_OUTPUT
           
           echo "Deploying to: $ENV"
           echo "Using tfvars: ${ENV}.tfvars"
@@ -93,7 +83,7 @@ jobs:
     name: Terraform Deploy
     needs: setup
     runs-on: ubuntu-latest
-    environment: ${{ needs.setup.outputs.gh-environment }}
+    environment: ${{ needs.setup.outputs.environment }}
     
     defaults:
       run:
@@ -182,7 +172,7 @@ jobs:
     name: Web Deploy
     needs: [setup, terraform-deploy]
     runs-on: ubuntu-latest
-    environment: ${{ needs.setup.outputs.gh-environment }}
+    environment: ${{ needs.setup.outputs.environment }}
     
     defaults:
       run:
@@ -276,7 +266,7 @@ jobs:
     name: iOS Deploy
     needs: [setup, terraform-deploy]
     runs-on: macos-14
-    environment: ${{ needs.setup.outputs.gh-environment }}
+    environment: ${{ needs.setup.outputs.environment }}
     
     defaults:
       run:
