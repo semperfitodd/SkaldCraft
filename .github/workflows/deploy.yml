@@ -1,31 +1,8 @@
-# =============================================================================
-# DEPLOYMENT WORKFLOW
-# =============================================================================
-# Branch mapping:
-#   - dev branch  => development environment
-#   - main branch => production environment
-#
-# Required GitHub Secrets:
-#   - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
-#   - TF_STATE_BUCKET, TF_STATE_REGION
-#
-# GitHub Environments (optional for approval gates):
-#   - dev (no approval required)
-#   - prod (requires manual approval)
-#
-# Terraform:
-#   - Separate state files: skaldcraft/dev/terraform.tfstate & skaldcraft/prod/terraform.tfstate
-#   - Uses dev.tfvars for dev, prod.tfvars for prod
-#   - Outputs: static_site_bucket, cloudfront_distribution_id
-# =============================================================================
-
 name: Deploy
 
 on:
   push:
-    branches:
-      - dev
-      - main
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -35,54 +12,52 @@ on:
         options:
           - dev
           - prod
+      terraform_action:
+        description: 'Terraform action'
+        required: true
+        type: choice
+        default: 'apply'
+        options:
+          - plan
+          - apply
 
-# Ensure only one deployment per environment runs at a time
-concurrency:
-  group: deploy-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
-  cancel-in-progress: false
+env:
+  NODE_VERSION: '20.x'
+  TERRAFORM_VERSION: '1.9.0'
+  AWS_REGION: 'us-east-1'
 
 jobs:
-  # ============================================================================
-  # SETUP - Determine environment and validate
-  # ============================================================================
+  # Determine environment
   setup:
     name: Setup Deployment
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
-      tfvars-file: ${{ steps.set-env.outputs.tfvars-file }}
-      backend-key: ${{ steps.set-env.outputs.backend-key }}
+      terraform_action: ${{ steps.set-env.outputs.terraform_action }}
     
     steps:
       - name: Determine environment
         id: set-env
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            ENV="${{ github.event.inputs.environment }}"
-          elif [ "${{ github.ref_name }}" == "main" ]; then
-            ENV="prod"
-          elif [ "${{ github.ref_name }}" == "dev" ]; then
-            ENV="dev"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "terraform_action=${{ github.event.inputs.terraform_action }}" >> $GITHUB_OUTPUT
           else
-            echo "Unknown branch: ${{ github.ref_name }}"
-            exit 1
+            # Auto-deploy to dev on main branch push
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "terraform_action=apply" >> $GITHUB_OUTPUT
           fi
-          
-          echo "environment=$ENV" >> $GITHUB_OUTPUT
-          echo "tfvars-file=${ENV}.tfvars" >> $GITHUB_OUTPUT
-          echo "backend-key=skaldcraft/${ENV}/terraform.tfstate" >> $GITHUB_OUTPUT
-          
-          echo "Deploying to: $ENV"
-          echo "Using tfvars: ${ENV}.tfvars"
-          echo "Backend key: skaldcraft/${ENV}/terraform.tfstate"
 
-  # ============================================================================
-  # BUILD LAMBDA FUNCTIONS
-  # ============================================================================
-  build-lambdas:
-    name: Build Lambda Functions
-    needs: setup
+      - name: Display deployment info
+        run: |
+          echo "Deploying to: ${{ steps.set-env.outputs.environment }}"
+          echo "Terraform action: ${{ steps.set-env.outputs.terraform_action }}"
+
+  # Build all artifacts
+  build:
+    name: Build All Artifacts
     runs-on: ubuntu-latest
+    needs: setup
     
     steps:
       - name: Checkout code
@@ -91,391 +66,200 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Create builds directory
-        run: mkdir -p terraform/builds
-
-      - name: Build lambda_shared layer
-        working-directory: terraform/lambda_shared
+      # Build Static Site
+      - name: Build static site
+        working-directory: ./static_site
         run: |
-          npm install
+          npm ci
           npm run build
-          mkdir -p nodejs/node_modules/lambda_shared
-          # Copy built JS files to layer
-          cp *.js nodejs/node_modules/lambda_shared/
-          cp package.json nodejs/node_modules/lambda_shared/
-          # Copy dependencies to layer
-          cp -r node_modules/* nodejs/node_modules/
-          cd nodejs
-          zip -r ../../../builds/lambda_shared_layer.zip .
 
-      - name: Build lambda_stories
-        working-directory: terraform/lambda_stories
-        run: |
-          # Install dependencies (excluding lambda_shared since it's in the layer)
-          npm install --omit=optional
-          npm run build
-          # Package only the function code (dependencies are in layer)
-          zip -r ../../builds/lambda_stories.zip *.js package.json -x "*.ts" -x "tsconfig.json" -x "node_modules/*"
-
-      - name: Build lambda_child_stories
-        working-directory: terraform/lambda_child_stories
-        run: |
-          # Install dependencies (excluding lambda_shared since it's in the layer)
-          npm install --omit=optional
-          npm run build
-          # Package only the function code (dependencies are in layer)
-          zip -r ../../builds/lambda_child_stories.zip *.js package.json -x "*.ts" -x "tsconfig.json" -x "node_modules/*"
-
-      - name: Build lambda_profiles
-        working-directory: terraform/lambda_profiles
-        run: |
-          # Install dependencies (excluding lambda_shared since it's in the layer)
-          npm install --omit=optional
-          npm run build
-          # Package only the function code (dependencies are in layer)
-          zip -r ../../builds/lambda_profiles.zip *.js package.json -x "*.ts" -x "tsconfig.json" -x "node_modules/*"
-
-      - name: Upload Lambda artifacts
+      - name: Upload static site
         uses: actions/upload-artifact@v4
         with:
-          name: lambda-builds-${{ needs.setup.outputs.environment }}
-          path: terraform/builds/*.zip
-          retention-days: 90
-          # Set to private if repo is public and contains sensitive code
-          # This requires GitHub Enterprise or Team plan
-          # For public repos on free plan, consider encrypting zips or using S3
+          name: static-site-build
+          path: static_site/build/
+          retention-days: 1
 
-  # ============================================================================
-  # TERRAFORM DEPLOY
-  # ============================================================================
-  terraform-deploy:
-    name: Terraform Deploy
-    needs: [setup, build-lambdas]
+      # Build Lambda Shared Layer
+      - name: Build Lambda Shared Layer
+        working-directory: ./terraform/lambda_shared
+        run: |
+          npm ci --production
+          npm run build
+          mkdir -p layer/nodejs
+          cp -r node_modules layer/nodejs/
+          cp *.js layer/nodejs/
+          cp package.json layer/nodejs/
+          cd layer
+          zip -r ../lambda_shared_layer.zip nodejs/
+
+      - name: Upload Lambda Shared Layer
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-shared-layer
+          path: terraform/lambda_shared/lambda_shared_layer.zip
+          retention-days: 1
+
+      # Build Lambda Profiles
+      - name: Build Lambda Profiles
+        working-directory: ./terraform/lambda_profiles
+        run: |
+          npm ci --production
+          npm run build
+          zip -r lambda_profiles.zip *.js node_modules/ package.json
+
+      - name: Upload Lambda Profiles
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-profiles
+          path: terraform/lambda_profiles/lambda_profiles.zip
+          retention-days: 1
+
+      # Build Lambda Stories
+      - name: Build Lambda Stories
+        working-directory: ./terraform/lambda_stories
+        run: |
+          npm ci --production
+          npm run build
+          zip -r lambda_stories.zip *.js node_modules/ package.json
+
+      - name: Upload Lambda Stories
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-stories
+          path: terraform/lambda_stories/lambda_stories.zip
+          retention-days: 1
+
+      # Build Lambda Child Stories
+      - name: Build Lambda Child Stories
+        working-directory: ./terraform/lambda_child_stories
+        run: |
+          npm ci --production
+          npm run build
+          zip -r lambda_child_stories.zip *.js node_modules/ package.json
+
+      - name: Upload Lambda Child Stories
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-child-stories
+          path: terraform/lambda_child_stories/lambda_child_stories.zip
+          retention-days: 1
+
+  # Deploy with Terraform
+  deploy:
+    name: Deploy to ${{ needs.setup.outputs.environment }}
     runs-on: ubuntu-latest
-    
+    needs: [setup, build]
+    environment: ${{ needs.setup.outputs.environment }}
     defaults:
       run:
-        working-directory: terraform
-    
-    outputs:
-      s3-bucket: ${{ steps.tf-outputs.outputs.s3-bucket }}
-      cloudfront-id: ${{ steps.tf-outputs.outputs.cloudfront-id }}
+        working-directory: ./terraform
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download Lambda artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: lambda-builds-${{ needs.setup.outputs.environment }}
-          path: terraform/builds
+          path: artifacts/
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ~1.9.0
-          terraform_wrapper: false
+      - name: Prepare build artifacts
+        run: |
+          mkdir -p builds
+          cp ../artifacts/lambda-shared-layer/lambda_shared_layer.zip builds/
+          cp ../artifacts/lambda-profiles/lambda_profiles.zip builds/
+          cp ../artifacts/lambda-stories/lambda_stories.zip builds/
+          cp ../artifacts/lambda-child-stories/lambda_child_stories.zip builds/
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Fetch tfvars from AWS Secrets Manager
-        run: |
-          ENV="${{ needs.setup.outputs.environment }}"
-          SECRET_NAME="skaldcraft_app_${ENV}/github-tfvars"
-          
-          echo "Fetching secret: $SECRET_NAME"
-          
-          # Get secret from AWS Secrets Manager
-          SECRET_JSON=$(aws secretsmanager get-secret-value \
-            --secret-id "$SECRET_NAME" \
-            --query SecretString \
-            --output text)
-          
-          # Convert JSON to tfvars format
-          echo "$SECRET_JSON" | jq -r 'to_entries | .[] | "\(.key) = \"\(.value)\""' > ${{ needs.setup.outputs.tfvars-file }}
-          
-          echo "Created ${{ needs.setup.outputs.tfvars-file }}"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Terraform Init
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="region=${{ secrets.TF_STATE_REGION }}" \
-            -backend-config="key=${{ needs.setup.outputs.backend-key }}"
+            -backend-config="key=${{ needs.setup.outputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}"
 
       - name: Terraform Plan
         id: plan
         run: |
           terraform plan \
-            -var-file="${{ needs.setup.outputs.tfvars-file }}" \
-            -out=tfplan \
-            -no-color
-        env:
-          TF_VAR_environment: ${{ needs.setup.outputs.environment }}
-          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+            -var-file="${{ needs.setup.outputs.environment }}.tfvars" \
+            -var="adult_story_model_id=${{ secrets.ADULT_STORY_MODEL_ID }}" \
+            -var="adult_summarizer_model_id=${{ secrets.ADULT_SUMMARIZER_MODEL_ID }}" \
+            -var="apple_app_id=${{ secrets.APPLE_APP_ID }}" \
+            -var="apple_key_id=${{ secrets.APPLE_KEY_ID }}" \
+            -var="apple_private_key=${{ secrets.APPLE_PRIVATE_KEY }}" \
+            -var="apple_team_id=${{ secrets.APPLE_TEAM_ID }}" \
+            -var="google_client_id=${{ secrets.GOOGLE_CLIENT_ID }}" \
+            -var="google_client_secret=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+            -out=tfplan
 
       - name: Terraform Apply
-        id: apply
+        if: needs.setup.outputs.terraform_action == 'apply'
         run: terraform apply -auto-approve tfplan
-        env:
-          TF_VAR_environment: ${{ needs.setup.outputs.environment }}
-          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
 
-      - name: Extract Terraform Outputs
-        id: tf-outputs
+      - name: Get Terraform Outputs
+        if: needs.setup.outputs.terraform_action == 'apply'
+        id: terraform-outputs
         run: |
-          S3_BUCKET=$(terraform output -raw static_site_bucket)
-          CF_ID=$(terraform output -raw cloudfront_distribution_id)
-          
-          echo "s3-bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
-          echo "cloudfront-id=$CF_ID" >> $GITHUB_OUTPUT
-          
-          echo "S3 Bucket: $S3_BUCKET"
-          echo "CloudFront ID: $CF_ID"
+          echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
+          echo "frontend_url=$(terraform output -raw frontend_url)" >> $GITHUB_OUTPUT
+          echo "cognito_user_pool_id=$(terraform output -raw cognito_user_pool_id)" >> $GITHUB_OUTPUT
+          echo "cognito_client_id=$(terraform output -raw cognito_client_id)" >> $GITHUB_OUTPUT
+          echo "website_bucket=$(terraform output -raw static_site_bucket)" >> $GITHUB_OUTPUT
+          echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
 
-  # ============================================================================
-  # WEB DEPLOY
-  # ============================================================================
-  web-deploy:
-    name: Web Deploy
-    needs: [setup, terraform-deploy]
-    runs-on: ubuntu-latest
-    
-    defaults:
-      run:
-        working-directory: static_site
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: static_site/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build application
-        run: npm run build
-        env:
-          CI: true
-          REACT_APP_ENVIRONMENT: ${{ needs.setup.outputs.environment }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Detect build directory
-        id: build-dir
+      - name: Upload static site to S3
+        if: needs.setup.outputs.terraform_action == 'apply'
         run: |
-          if [ -d "build" ]; then
-            echo "dir=build" >> $GITHUB_OUTPUT
-            echo "Using build directory: build/"
-          elif [ -d "dist" ]; then
-            echo "dir=dist" >> $GITHUB_OUTPUT
-            echo "Using build directory: dist/"
-          else
-            echo "ERROR: No build directory found!"
-            exit 1
-          fi
-
-      - name: Deploy to S3
-        run: |
-          BUILD_DIR="${{ steps.build-dir.outputs.dir }}"
-          S3_BUCKET="${{ needs.terraform-deploy.outputs.s3-bucket }}"
-          
-          echo "Deploying $BUILD_DIR/ to s3://$S3_BUCKET/"
-          
-          # Sync static assets with long cache
-          aws s3 sync "$BUILD_DIR/" "s3://$S3_BUCKET/" \
+          aws s3 sync ../artifacts/static-site-build/ s3://${{ steps.terraform-outputs.outputs.website_bucket }}/ \
             --delete \
             --cache-control "public, max-age=31536000, immutable" \
-            --exclude "*.html" \
+            --exclude "index.html" \
             --exclude "manifest.json" \
             --exclude "robots.txt"
           
-          # Sync HTML files with no cache
-          aws s3 sync "$BUILD_DIR/" "s3://$S3_BUCKET/" \
-            --cache-control "public, max-age=0, must-revalidate" \
-            --exclude "*" \
-            --include "*.html" \
-            --include "manifest.json" \
-            --include "robots.txt"
+          # Upload files that should not be cached aggressively
+          aws s3 cp ../artifacts/static-site-build/index.html s3://${{ steps.terraform-outputs.outputs.website_bucket }}/index.html \
+            --cache-control "public, max-age=0, must-revalidate"
+          aws s3 cp ../artifacts/static-site-build/manifest.json s3://${{ steps.terraform-outputs.outputs.website_bucket }}/manifest.json \
+            --cache-control "public, max-age=0, must-revalidate"
+          aws s3 cp ../artifacts/static-site-build/robots.txt s3://${{ steps.terraform-outputs.outputs.website_bucket }}/robots.txt \
+            --cache-control "public, max-age=0, must-revalidate"
 
       - name: Invalidate CloudFront cache
+        if: needs.setup.outputs.terraform_action == 'apply'
         run: |
-          CF_ID="${{ needs.terraform-deploy.outputs.cloudfront-id }}"
-          
-          echo "Invalidating CloudFront distribution: $CF_ID"
-          
           aws cloudfront create-invalidation \
-            --distribution-id "$CF_ID" \
+            --distribution-id ${{ steps.terraform-outputs.outputs.cloudfront_distribution_id }} \
             --paths "/*"
 
-      - name: Upload deployment artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-deployment-${{ needs.setup.outputs.environment }}
-          path: static_site/${{ steps.build-dir.outputs.dir }}/
-          retention-days: 30
-
-  # ============================================================================
-  # iOS DEPLOY
-  # ============================================================================
-  ios-deploy:
-    name: iOS Deploy
-    needs: [setup, terraform-deploy]
-    runs-on: macos-14
-    
-    defaults:
-      run:
-        working-directory: mobile
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
-
-      - name: Show Xcode version
-        run: xcodebuild -version
-
-      - name: Cache Swift Package Manager
-        uses: actions/cache@v4
-        with:
-          path: |
-            mobile/SkaldCraft.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-            mobile/SkaldCraft.xcworkspace/xcshareddata/swiftpm
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-
-
-      - name: Detect project structure
-        id: detect
+      - name: Deployment Summary
+        if: needs.setup.outputs.terraform_action == 'apply'
         run: |
-          if [ -f "SkaldCraft.xcworkspace/contents.xcworkspacedata" ]; then
-            echo "use_workspace=true" >> $GITHUB_OUTPUT
-            echo "project_file=SkaldCraft.xcworkspace" >> $GITHUB_OUTPUT
-          elif [ -f "SkaldCraft.xcodeproj/project.pbxproj" ]; then
-            echo "use_workspace=false" >> $GITHUB_OUTPUT
-            echo "project_file=SkaldCraft.xcodeproj" >> $GITHUB_OUTPUT
-          else
-            echo "No Xcode project or workspace found!"
-            exit 1
-          fi
-
-      - name: Set build configuration
-        id: config
-        run: |
-          if [ "${{ needs.setup.outputs.environment }}" == "prod" ]; then
-            echo "configuration=Release" >> $GITHUB_OUTPUT
-          else
-            echo "configuration=Debug" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Build for simulator (no signing)
-        run: |
-          BUILD_DIR="build/${{ needs.setup.outputs.environment }}"
-          mkdir -p "$BUILD_DIR"
-          
-          if [ "${{ steps.detect.outputs.use_workspace }}" == "true" ]; then
-            xcodebuild clean build \
-              -workspace ${{ steps.detect.outputs.project_file }} \
-              -scheme SkaldCraft \
-              -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
-              -configuration ${{ steps.config.outputs.configuration }} \
-              -derivedDataPath "$BUILD_DIR/DerivedData" \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              | tee "$BUILD_DIR/build.log" | xcpretty
-          else
-            xcodebuild clean build \
-              -project ${{ steps.detect.outputs.project_file }} \
-              -scheme SkaldCraft \
-              -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
-              -configuration ${{ steps.config.outputs.configuration }} \
-              -derivedDataPath "$BUILD_DIR/DerivedData" \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              | tee "$BUILD_DIR/build.log" | xcpretty
-          fi
-
-      # TODO: For production builds with signing configured:
-      # - Import signing certificates and provisioning profiles
-      # - Build archive with xcodebuild archive
-      # - Export IPA with xcodebuild -exportArchive
-      # - Upload to TestFlight or internal distribution
-      
-      - name: Create build info
-        run: |
-          BUILD_DIR="build/${{ needs.setup.outputs.environment }}"
-          cat > "$BUILD_DIR/build-info.json" <<EOF
-          {
-            "environment": "${{ needs.setup.outputs.environment }}",
-            "branch": "${{ github.ref_name }}",
-            "commit": "${{ github.sha }}",
-            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "configuration": "${{ steps.config.outputs.configuration }}",
-            "xcode_version": "$(xcodebuild -version | head -n 1)"
-          }
-          EOF
-
-      - name: Upload iOS build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build-${{ needs.setup.outputs.environment }}
-          path: |
-            mobile/build/${{ needs.setup.outputs.environment }}/build.log
-            mobile/build/${{ needs.setup.outputs.environment }}/build-info.json
-            mobile/build/${{ needs.setup.outputs.environment }}/DerivedData/Build/Products/**/*.app
-          retention-days: 30
-
-  # ============================================================================
-  # DEPLOYMENT SUMMARY
-  # ============================================================================
-  summary:
-    name: Deployment Summary
-    needs: [setup, terraform-deploy, web-deploy, ios-deploy]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: Generate summary
-        run: |
-          echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Environment:** ${{ needs.setup.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Job Status" >> $GITHUB_STEP_SUMMARY
-          echo "- Terraform: ${{ needs.terraform-deploy.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Web Deploy: ${{ needs.web-deploy.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- iOS Deploy: ${{ needs.ios-deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "### URLs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Website:** https://${{ steps.terraform-outputs.outputs.frontend_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API:** https://${{ steps.terraform-outputs.outputs.api_url }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ needs.terraform-deploy.outputs.s3-bucket }}" != "" ]; then
-            echo "**S3 Bucket:** ${{ needs.terraform-deploy.outputs.s3-bucket }}" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [ "${{ needs.terraform-deploy.outputs.cloudfront-id }}" != "" ]; then
-            echo "**CloudFront ID:** ${{ needs.terraform-deploy.outputs.cloudfront-id }}" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "### Cognito" >> $GITHUB_STEP_SUMMARY
+          echo "- **User Pool ID:** ${{ steps.terraform-outputs.outputs.cognito_user_pool_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Client ID:** ${{ steps.terraform-outputs.outputs.cognito_client_id }}" >> $GITHUB_STEP_SUMMARY

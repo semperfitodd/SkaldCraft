@@ -22,3 +22,4 @@ export async function getChildProfile(parentEmail: string, profileId: string): P
   }));
   return (result.Item as ChildProfile) || null;
 }
+

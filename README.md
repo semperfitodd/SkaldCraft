@@ -21,10 +21,14 @@ Whether you're an adult seeking an interactive escape or a parent guiding a chil
 - [OAuth Provider Setup](#oauth-provider-setup)
   - [Apple Sign In](#apple-sign-in)
   - [Google Sign In](#google-sign-in)
+- [CI/CD Pipeline](#cicd-pipeline)
+  - [Quick Start](#quick-start)
+  - [Workflows](#workflows)
+  - [Build Scripts](#build-scripts)
 - [Deployment](#deployment)
 - [Project Structure](#project-structure)
+- [Documentation](#documentation)
 - [Author](#author)
-- [License](#license)
 
 ## Features
 
@@ -216,55 +220,161 @@ base64 -i AuthKey_XXXXXXXXXX.p8
 4. Configure authorized redirect URIs:
    - `https://{environment}-auth.{domain}/oauth2/idpresponse`
 
+## CI/CD Pipeline
+
+SkaldCraft includes a complete GitHub Actions CI/CD pipeline for automated building, testing, and deployment.
+
+### Quick Start
+
+1. **Set up GitHub Secrets** (see [docs/SECRETS_REFERENCE.md](docs/SECRETS_REFERENCE.md))
+   ```bash
+   gh secret set AWS_ACCESS_KEY_ID --body "YOUR_VALUE"
+   gh secret set AWS_SECRET_ACCESS_KEY --body "YOUR_VALUE"
+   gh secret set TF_STATE_BUCKET --body "YOUR_VALUE"
+   # ... and other required secrets
+   ```
+
+2. **Push to main branch** - Automatically deploys to `dev`
+   ```bash
+   git push origin main
+   ```
+
+3. **Manual deployment** - Deploy to any environment
+   - Go to Actions → Deploy → Run workflow
+   - Select environment (`dev` or `prod`)
+   - Select action (`plan` or `apply`)
+
+### Workflows
+
+- **CI** (`ci.yml`): Runs on every PR and push
+  - Builds React static site
+  - Compiles TypeScript Lambda functions
+  - Builds Lambda shared layer
+  - Validates Terraform
+  - Builds and tests iOS app
+
+- **Deploy** (`deploy.yml`): Deploys to AWS
+  - Builds all artifacts
+  - Runs Terraform apply
+  - Uploads static site to S3
+  - Invalidates CloudFront cache
+
+### Build Scripts
+
+Local development scripts in `scripts/`:
+
+```bash
+# Build all Lambda functions and shared layer
+./scripts/build-lambdas.sh
+
+# Build React static site
+./scripts/build-static-site.sh
+
+# Clean all build artifacts
+./scripts/clean-builds.sh
+```
+
+### Documentation
+
+- **[CI/CD Setup Guide](docs/CICD_SETUP.md)** - Complete setup instructions
+- **[Secrets Reference](docs/SECRETS_REFERENCE.md)** - All required secrets and how to get them
+- **[Workflows README](.github/workflows/README.md)** - Detailed workflow documentation
+
 ## Deployment
 
-### Deploy Infrastructure
+### Automated Deployment (Recommended)
 
-```bash
-cd terraform
-terraform apply
-```
+Use GitHub Actions for automated deployment:
 
-### Deploy Web Application
+1. **Development**: Push to `main` branch
+   ```bash
+   git push origin main
+   ```
 
-```bash
-cd static_site
-npm run build
-cd ../terraform
-terraform apply
-```
+2. **Production**: Manual workflow dispatch
+   - Go to Actions → Deploy → Run workflow
+   - Select `prod` environment
+   - Requires approval from designated reviewers
 
-The S3 bucket is automatically synced with the build directory on `terraform apply`.
+### Manual Deployment
 
-### Invalidate CloudFront Cache (if needed)
+For local or emergency deployments:
 
-```bash
-aws cloudfront create-invalidation \
-  --distribution-id YOUR_DISTRIBUTION_ID \
-  --paths "/*"
-```
+1. **Build artifacts**
+   ```bash
+   ./scripts/build-lambdas.sh
+   ./scripts/build-static-site.sh
+   ```
+
+2. **Deploy infrastructure**
+   ```bash
+   cd terraform
+   terraform init \
+     -backend-config="bucket=YOUR_STATE_BUCKET" \
+     -backend-config="key=dev/terraform.tfstate" \
+     -backend-config="region=us-east-1"
+   terraform apply -var-file="dev.tfvars"
+   ```
+
+3. **Upload static site**
+   ```bash
+   BUCKET_NAME=$(terraform output -raw static_site_bucket)
+   aws s3 sync ../static_site/build/ s3://$BUCKET_NAME/ --delete
+   ```
+
+4. **Invalidate CloudFront cache**
+   ```bash
+   DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
+   aws cloudfront create-invalidation \
+     --distribution-id $DISTRIBUTION_ID \
+     --paths "/*"
+   ```
 
 ## Project Structure
 
 ```
 SkaldCraft/
-├── mobile/                    # iOS application
-│   ├── Config/               # Xcode build configurations
-│   ├── SkaldCraft/           # Main app target
-│   ├── SkaldCraftPackage/    # Swift Package with features
-│   └── SkaldCraftUITests/    # UI tests
-├── static_site/              # React web application
-│   ├── public/               # Static assets
+├── .github/
+│   └── workflows/            # GitHub Actions CI/CD workflows
+│       ├── ci.yml           # Continuous Integration
+│       ├── deploy.yml       # Deployment workflow
+│       └── README.md        # Workflow documentation
+├── docs/                     # Documentation
+│   ├── CICD_SETUP.md        # CI/CD setup guide
+│   └── SECRETS_REFERENCE.md # GitHub secrets reference
+├── mobile/                   # iOS application
+│   ├── Config/              # Xcode build configurations
+│   ├── SkaldCraft/          # Main app target
+│   ├── SkaldCraftPackage/   # Swift Package with features
+│   └── SkaldCraftUITests/   # UI tests
+├── scripts/                  # Build and deployment scripts
+│   ├── build-lambdas.sh     # Build Lambda functions
+│   ├── build-static-site.sh # Build React app
+│   └── clean-builds.sh      # Clean build artifacts
+├── static_site/             # React web application
+│   ├── public/              # Static assets
 │   └── src/
-│       ├── components/       # Reusable UI components
-│       ├── hooks/            # Custom React hooks
-│       ├── pages/            # Page components
-│       ├── styles/           # Global styles and variables
-│       └── utils/            # Utilities and configuration
-└── terraform/                # Infrastructure as code
-    ├── lambda_api/           # API Lambda function source
-    └── *.tf                  # Terraform configurations
+│       ├── components/      # Reusable UI components
+│       ├── hooks/           # Custom React hooks
+│       ├── pages/           # Page components
+│       ├── styles/          # Global styles and variables
+│       └── utils/           # Utilities and configuration
+└── terraform/               # Infrastructure as code
+    ├── builds/              # Build artifacts (gitignored)
+    ├── lambda_shared/       # Shared Lambda layer
+    ├── lambda_profiles/     # Profiles Lambda function
+    ├── lambda_stories/      # Stories Lambda function
+    ├── lambda_child_stories/# Child stories Lambda function
+    ├── dev.tfvars          # Development environment config
+    ├── prod.tfvars         # Production environment config
+    └── *.tf                # Terraform configurations
 ```
+
+## Documentation
+
+- **[CI/CD Setup Guide](docs/CICD_SETUP.md)** - Complete guide to setting up the CI/CD pipeline
+- **[Secrets Reference](docs/SECRETS_REFERENCE.md)** - All required GitHub secrets and how to obtain them
+- **[Workflows README](.github/workflows/README.md)** - Detailed documentation of GitHub Actions workflows
 
 ## Author
 
