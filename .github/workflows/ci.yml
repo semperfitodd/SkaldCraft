@@ -2,9 +2,9 @@ name: CI - Build and Test
 
 on:
   pull_request:
-    branches: [main, develop, dev]
+    branches: [main, dev]
   push:
-    branches: [main, develop, dev]
+    branches: [main, dev]
   workflow_dispatch:
 
 env:
@@ -66,11 +66,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: terraform/lambda_shared/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci --production
+      - name: Install all dependencies (including dev)
+        run: npm ci
 
       - name: Build TypeScript
         run: npm run build
+
+      - name: Install production dependencies only
+        run: |
+          rm -rf node_modules
+          npm ci --production
 
       - name: Create layer structure
         run: |
@@ -111,11 +116,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: terraform/lambda_profiles/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci --production
+      - name: Install all dependencies (including dev)
+        run: npm ci
 
       - name: Build TypeScript
         run: npm run build
+
+      - name: Install production dependencies only
+        run: |
+          rm -rf node_modules
+          npm ci --production
 
       - name: Create deployment package
         run: |
@@ -147,11 +157,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: terraform/lambda_stories/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci --production
+      - name: Install all dependencies (including dev)
+        run: npm ci
 
       - name: Build TypeScript
         run: npm run build
+
+      - name: Install production dependencies only
+        run: |
+          rm -rf node_modules
+          npm ci --production
 
       - name: Create deployment package
         run: |
@@ -183,11 +198,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: terraform/lambda_child_stories/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci --production
+      - name: Install all dependencies (including dev)
+        run: npm ci
 
       - name: Build TypeScript
         run: npm run build
+
+      - name: Install production dependencies only
+        run: |
+          rm -rf node_modules
+          npm ci --production
 
       - name: Create deployment package
         run: |

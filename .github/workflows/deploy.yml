@@ -86,8 +86,10 @@ jobs:
       - name: Build Lambda Shared Layer
         working-directory: ./terraform/lambda_shared
         run: |
-          npm ci --production
+          npm ci
           npm run build
+          rm -rf node_modules
+          npm ci --production
           mkdir -p layer/nodejs
           cp -r node_modules layer/nodejs/
           cp *.js layer/nodejs/
@@ -106,8 +108,10 @@ jobs:
       - name: Build Lambda Profiles
         working-directory: ./terraform/lambda_profiles
         run: |
-          npm ci --production
+          npm ci
           npm run build
+          rm -rf node_modules
+          npm ci --production
           zip -r lambda_profiles.zip *.js node_modules/ package.json
 
       - name: Upload Lambda Profiles
@@ -121,8 +125,10 @@ jobs:
       - name: Build Lambda Stories
         working-directory: ./terraform/lambda_stories
         run: |
-          npm ci --production
+          npm ci
           npm run build
+          rm -rf node_modules
+          npm ci --production
           zip -r lambda_stories.zip *.js node_modules/ package.json
 
       - name: Upload Lambda Stories
@@ -136,8 +142,10 @@ jobs:
       - name: Build Lambda Child Stories
         working-directory: ./terraform/lambda_child_stories
         run: |
-          npm ci --production
+          npm ci
           npm run build
+          rm -rf node_modules
+          npm ci --production
           zip -r lambda_child_stories.zip *.js node_modules/ package.json
 
       - name: Upload Lambda Child Stories

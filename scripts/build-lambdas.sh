@@ -24,11 +24,15 @@ build_lambda() {
     echo -e "\n${YELLOW}Building ${lambda_name}...${NC}"
     cd "$lambda_dir"
     
-    # Install dependencies
-    npm ci --production
+    # Install all dependencies (including dev for TypeScript)
+    npm ci
     
     # Build TypeScript
     npm run build
+    
+    # Reinstall production dependencies only
+    rm -rf node_modules
+    npm ci --production
     
     # Create zip file
     zip -r "${output_name}.zip" *.js node_modules/ package.json > /dev/null
@@ -44,11 +48,15 @@ build_lambda() {
 echo -e "\n${YELLOW}Building Lambda Shared Layer...${NC}"
 cd lambda_shared
 
-# Install dependencies
-npm ci --production
+# Install all dependencies (including dev for TypeScript)
+npm ci
 
 # Build TypeScript
 npm run build
+
+# Reinstall production dependencies only
+rm -rf node_modules
+npm ci --production
 
 # Create layer structure
 mkdir -p layer/nodejs
