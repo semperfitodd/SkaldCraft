@@ -5,7 +5,6 @@
 **/build/*
 **/builds/*
 **/node_modules/*
-package-lock.json
 
 # Lambda build artifacts (TypeScript compilation output)
 terraform/lambda_*/lambda_*/
