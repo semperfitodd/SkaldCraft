@@ -194,6 +194,9 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
+      - name: Create builds directory
+        run: mkdir -p builds
+
       - name: Terraform Init
         run: |
           terraform init \
