@@ -181,6 +181,8 @@ jobs:
           cp ../artifacts/lambda-profiles/lambda_profiles.zip builds/
           cp ../artifacts/lambda-stories/lambda_stories.zip builds/
           cp ../artifacts/lambda-child-stories/lambda_child_stories.zip builds/
+          ls -la builds/
+          echo "Build artifacts prepared"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -193,9 +195,6 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Create builds directory
-        run: mkdir -p builds
 
       - name: Terraform Init
         run: |
