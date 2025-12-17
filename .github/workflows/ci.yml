@@ -300,7 +300,7 @@ jobs:
             -workspace SkaldCraft.xcworkspace \
             -scheme SkaldCraft \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=Any iOS Simulator Device' \
+            -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/ \
             CODE_SIGNING_ALLOWED=NO
 
@@ -310,7 +310,7 @@ jobs:
             -workspace SkaldCraft.xcworkspace \
             -scheme SkaldCraft \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=Any iOS Simulator Device' \
+            -destination 'id=dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder' \
             -derivedDataPath build/ \
             CODE_SIGNING_ALLOWED=NO
 
